@@ -12,6 +12,8 @@ public class ChameleonPainter : ModuleRules
 				"Core",
 				"CoreUObject",
 				"Engine",
+				"EnhancedInput",
+				"InputCore",
 				"ProceduralMeshComponent",
 				"UMG"
 			});

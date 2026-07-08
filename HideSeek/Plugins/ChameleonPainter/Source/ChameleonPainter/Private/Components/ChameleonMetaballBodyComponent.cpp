@@ -112,10 +112,12 @@ FVector InterpolateSample(const FFieldSample& A, const FFieldSample& B)
 FImplicitTriangle MakeOrientedTriangle(const FVector& A, const FVector& B, const FVector& C)
 {
 	FImplicitTriangle Triangle = { { A, B, C } };
-	const FVector FaceNormal = FVector::CrossProduct(B - A, C - A);
+	const FVector RightHandedFaceNormal = FVector::CrossProduct(B - A, C - A);
 	const FVector Center = (A + B + C) / 3.0;
 
-	if (FVector::DotProduct(FaceNormal, FieldGradientAt(Center)) < 0.0)
+	// Unreal meshes use left-handed coordinates with counter-clockwise front faces.
+	// Keep vertex normals outward, but wind triangles for UE's front-face convention.
+	if (FVector::DotProduct(RightHandedFaceNormal, FieldGradientAt(Center)) > 0.0)
 	{
 		Triangle.Points[1] = C;
 		Triangle.Points[2] = B;

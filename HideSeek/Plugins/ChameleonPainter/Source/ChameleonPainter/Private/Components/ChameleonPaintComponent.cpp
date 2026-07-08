@@ -54,12 +54,19 @@ bool UChameleonPaintComponent::ApplyPaintColor()
 		return false;
 	}
 
+	bool bAppliedMetaball = false;
 	if (UChameleonMetaballBodyComponent* MetaballBody = Cast<UChameleonMetaballBodyComponent>(ResolvedTarget))
 	{
 		MetaballBody->SetCamouflageBaseColor(PaintColor);
+		bAppliedMetaball = true;
 	}
 
-	const int32 NumMaterials = FMath::Max(ResolvedTarget->GetNumMaterials(), 1);
+	const int32 NumMaterials = ResolvedTarget->GetNumMaterials();
+	if (NumMaterials <= 0)
+	{
+		return bAppliedMetaball;
+	}
+
 	bool bAppliedAnyMaterial = false;
 
 	for (int32 SlotIndex = 0; SlotIndex < NumMaterials; ++SlotIndex)
@@ -69,7 +76,13 @@ bool UChameleonPaintComponent::ApplyPaintColor()
 			continue;
 		}
 
-		UMaterialInstanceDynamic* DynamicMaterial = Cast<UMaterialInstanceDynamic>(ResolvedTarget->GetMaterial(SlotIndex));
+		UMaterialInterface* SourceMaterial = ResolvedTarget->GetMaterial(SlotIndex);
+		if (!SourceMaterial)
+		{
+			continue;
+		}
+
+		UMaterialInstanceDynamic* DynamicMaterial = Cast<UMaterialInstanceDynamic>(SourceMaterial);
 		if (!DynamicMaterial)
 		{
 			DynamicMaterial = ResolvedTarget->CreateDynamicMaterialInstance(SlotIndex);
@@ -84,7 +97,7 @@ bool UChameleonPaintComponent::ApplyPaintColor()
 		bAppliedAnyMaterial = true;
 	}
 
-	return bAppliedAnyMaterial || IsValid(Cast<UChameleonMetaballBodyComponent>(ResolvedTarget));
+	return bAppliedAnyMaterial || bAppliedMetaball;
 }
 
 UPrimitiveComponent* UChameleonPaintComponent::ResolveTargetComponent() const

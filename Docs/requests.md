@@ -37,3 +37,39 @@
 - 테스트 레벨, 페인트 머티리얼, 플레이어 연결, UMG 입력 연결, 일반 빌드 확인을 `P0` 항목으로 정리했다.
 - 브러시 입력, 배경 색 샘플링, render target 페인팅, 네트워크 복제, 헌터 판정, 라운드 흐름을 `P1` 항목으로 정리했다.
 - 메시 최적화, 애니메이션/리깅 방향, UI UX, 치트 대응, 플러그인 모듈 분리 검토를 `P2` 항목으로 정리했다.
+
+## 2026-07-08 23:30:52 (소요시간: 00:27:23)
+
+- 테스트 레벨과 페인트 머티리얼 생성, 플레이어 캐릭터 연결, 브러시 입력, 배경 색 샘플링, WASD/Space/Mouse 3인칭 이동 입력을 플러그인 중심 구조로 구현해 달라는 요청을 처리했다.
+- 최신 조정 요청에 맞춰 캐릭터 BP가 입력 애셋을 직접 들지 않고, `UChameleonPainterInputConfig` DataAsset을 `UChameleonPainterGameInstance` 계열 GameInstance BP가 보유하며, `AChameleonHiderCharacter`가 런타임에 GameInstance에서 해당 DA를 가져와 Enhanced Input을 바인딩하는 구조로 구현했다.
+- `ChameleonPainter` Runtime 모듈에 `UChameleonPainterInputConfig`, `UChameleonPainterGameInstance`, `AChameleonPainterGameMode`, `AChameleonHiderCharacter`를 추가했다.
+- `AChameleonHiderCharacter`에 `UChameleonMetaballBodyComponent`, `UChameleonPaintComponent`, SpringArm/Camera를 붙이고, DA 기반 `Move`, `Look`, `Jump`, `Paint`, `SampleColor`, `ToggleColorPicker` 액션 바인딩을 구현했다.
+- 브러시 입력은 카메라 시점 trace로 자신의 hider body에 stroke를 찍도록 구현했고, 배경 색 샘플링은 시야 trace 결과의 머티리얼 벡터 파라미터 `ChameleonSampleColor`, `PaintColor`, `BodyColor`, `BaseColor`, `Color` 순서로 대표 색을 읽도록 구현했다.
+- `UChameleonPaintComponent`는 material slot이 아직 없는 ProceduralMesh에도 안전하게 동작하도록 보강해, material이 없을 때는 metaball vertex color 적용까지만 성공 처리하게 했다.
+- `ChameleonPainterEditor` Editor 모듈과 `ChameleonPainterBuildTestContent` 커맨드렛을 추가했다.
+- 커맨드렛이 `/Game/ChameleonPainterTest` 아래에 테스트 텍스처, 머티리얼, `IA_` 입력 액션, `IMC_ChameleonPlayer`, `DA_ChameleonPainterInputConfig`, `BP_ChameleonHiderCharacter`, `BP_ChameleonPainterGameMode`, `BP_ChameleonPainterGameInstance`, `L_ChameleonPainter_Test` 맵을 생성하도록 했다.
+- `imagegen`으로 생성한 콘크리트, 나무, 초록 패널, 바닥 타일 PNG를 `HideSeek/SourceAssets/Textures/ChameleonPainterTest`에 두고, 에디터 커맨드렛에서 `UTextureFactory`로 Content 텍스처 애셋으로 import하게 했다.
+- 테스트 맵은 에디터 모듈에서 엔진 기본 도형을 조합해 바닥, 콘크리트 벽, 초록 패널, 나무 상자, 낮은 divider, PlayerStart, 조명, preview hider body를 배치하도록 구성했다.
+- `HideSeek/Config/DefaultEngine.ini`의 기본 맵, 에디터 시작 맵, GlobalDefaultGameMode, GameInstanceClass를 생성된 테스트 콘텐츠로 연결했다.
+- 병렬 에이전트 3개를 사용해 에디터 자산 생성 API, 플레이어/페인트/샘플링 구조, DA/GameInstance 입력 아키텍처를 나눠 검토했고, 최신 사용자 지시에 따라 DA/GameInstance 구조를 우선 적용했다.
+- 검증으로 `Build.bat HideSeekEditor Win64 Development -Project=D:\github\chameleon\HideSeek\HideSeek.uproject -WaitMutex -FromMsBuild` 일반 빌드가 성공했고, `UnrealEditor-Cmd.exe ... -run=ChameleonPainterBuildTestContent -unattended -nop4` 커맨드렛이 성공했다.
+- 커맨드렛 최종 실행은 0 errors, 절차형 metaball 메시의 degenerate triangle drop 경고만 남는 상태로 완료됐다.
+- AGENTS 지침에 따라 성공 빌드 후 `HideSeek/HideSeek.uproject`를 Unreal Editor로 열었다.
+
+## 2026-07-09 00:00:30 (소요시간: 00:04:15)
+
+- 캐릭터 모델 면방향이 뒤집혀 보이는 문제를 별도 에이전트에 할당해 함께 검토했다.
+- `UChameleonMetaballBodyComponent::MakeOrientedTriangle`에서 메타볼 procedural mesh triangle winding 조건을 UE left-handed 좌표계와 counter-clockwise front-face 규칙에 맞게 조정했다.
+- vertex normal은 `FieldGradientAt`의 outward 방향을 유지하고, triangle index 순서만 UE front-face convention에 맞춰 뒤집도록 정리했다.
+- 혼동을 줄이기 위해 `RightHandedFaceNormal` 변수명과 UE winding 규칙 주석을 추가했다.
+- `HideSeek/SourceAssets/Characters/Hider/generate-hider-metaball-body.mjs`도 같은 winding 규칙으로 맞추고 `SM_HiderMetaball_Body.obj/.mtl`을 재생성했다.
+- OBJ 재생성 결과는 `Vertices: 25693`, `Faces: 51392`로 토폴로지 개수는 유지됐다.
+- 일반 `Build.bat HideSeekEditor Win64 Development` 빌드는 현재 열린 에디터의 Live Coding 세션 때문에 차단됐고, `-LiveCoding` 빌드로 `ChameleonMetaballBodyComponent.cpp` 재컴파일 성공을 확인했다.
+
+## 2026-07-09 00:08:20 (소요시간: 00:01:05)
+
+- 사용자가 Unreal Editor를 닫은 뒤 일반 `Build.bat HideSeekEditor Win64 Development` 빌드를 다시 실행했다.
+- 일반 빌드가 성공해 `UnrealEditor-ChameleonPainter.dll`이 새로 링크됐고, Live Coding 세션 차단 없이 `ChameleonMetaballBodyComponent.cpp` 변경이 반영됐다.
+- `UnrealEditor-Cmd.exe -run=ChameleonPainterBuildTestContent -unattended -nop4`를 실행해 `/Game/ChameleonPainterTest` 테스트 콘텐츠를 재생성했다.
+- 커맨드렛 결과는 0 errors, 기존 metaball degenerate triangle warning 2건으로 완료됐다.
+- AGENTS 지침에 따라 빌드와 콘텐츠 재생성 후 `HideSeek/HideSeek.uproject`를 Unreal Editor로 다시 열었다.

@@ -125,7 +125,7 @@ function interpolate(a, b) {
 }
 
 function orientTriangle(points) {
-  const normal = cross(subtract(points[1], points[0]), subtract(points[2], points[0]));
+  const rightHandedNormal = cross(subtract(points[1], points[0]), subtract(points[2], points[0]));
   const center = [
     (points[0][0] + points[1][0] + points[2][0]) / 3.0,
     (points[0][1] + points[1][1] + points[2][1]) / 3.0,
@@ -133,7 +133,9 @@ function orientTriangle(points) {
   ];
   const outward = gradientAt(center);
 
-  if (dot(normal, outward) < 0.0) {
+  // The OBJ source is authored in UE's left-handed X-forward/Y-right/Z-up space.
+  // Keep vertex normals outward, but wind faces for UE's counter-clockwise front-face convention.
+  if (dot(rightHandedNormal, outward) > 0.0) {
     return [points[0], points[2], points[1]];
   }
 
