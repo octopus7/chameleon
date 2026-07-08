@@ -29,3 +29,11 @@
 - `HideSeek.uproject`와 `ChameleonPainter.uplugin` JSON 파싱을 확인했고, `Build.bat HideSeekEditor Win64 Development -Project=D:\github\chameleon\HideSeek\HideSeek.uproject -WaitMutex -FromMsBuild -LiveCoding` 빌드가 성공했다.
 - 일반 UBT 빌드는 에디터 Live Coding 세션 활성화 때문에 차단되어, 검증은 Live Coding 빌드 모드로 수행했다.
 - 사용자 요청에 따라 위 구현 내역을 `AGENTS.md` 기록 형식에 맞춰 `Docs/requests.md`에 남겼다.
+
+## 2026-07-08 23:27:09 (소요시간: 00:00:39)
+
+- 문서 경로에 TODO 문서를 만들고 다음 할일 후보와 우선순위를 검토해 표기해 달라는 요청을 처리했다.
+- `Docs/TODO.md`를 생성하고 `P0`, `P1`, `P2` 우선순위 기준을 정의했다.
+- 테스트 레벨, 페인트 머티리얼, 플레이어 연결, UMG 입력 연결, 일반 빌드 확인을 `P0` 항목으로 정리했다.
+- 브러시 입력, 배경 색 샘플링, render target 페인팅, 네트워크 복제, 헌터 판정, 라운드 흐름을 `P1` 항목으로 정리했다.
+- 메시 최적화, 애니메이션/리깅 방향, UI UX, 치트 대응, 플러그인 모듈 분리 검토를 `P2` 항목으로 정리했다.
