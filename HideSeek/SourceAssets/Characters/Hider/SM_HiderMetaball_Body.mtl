@@ -1,0 +1,8 @@
+# Paintable off-white placeholder material for UE import.
+newmtl PaintableBody
+Ka 0.8400 0.8200 0.7600
+Kd 0.8400 0.8200 0.7600
+Ks 0.0400 0.0400 0.0400
+Ns 12.0000
+d 1.0000
+illum 2
