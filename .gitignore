@@ -1,0 +1,55 @@
+# Unreal Engine generated folders
+/HideSeek/.vs/
+/HideSeek/Binaries/
+/HideSeek/DerivedDataCache/
+/HideSeek/Intermediate/
+/HideSeek/Saved/
+
+# Unreal Engine plugin generated folders
+/HideSeek/Plugins/**/Binaries/
+/HideSeek/Plugins/**/DerivedDataCache/
+/HideSeek/Plugins/**/Intermediate/
+/HideSeek/Plugins/**/Saved/
+
+# Generated IDE/project files
+*.sln
+*.suo
+*.user
+*.userosscache
+*.sdf
+*.opensdf
+*.VC.db
+*.VC.opendb
+*.code-workspace
+
+# Visual Studio Code local state
+.vscode/*
+!.vscode/settings.json
+!.vscode/tasks.json
+!.vscode/launch.json
+!.vscode/extensions.json
+
+# JetBrains Rider / IntelliJ local state
+.idea/
+
+# Xcode generated project files
+*.xcodeproj/
+*.xcworkspace/
+xcuserdata/
+
+# Packaged mobile build outputs and temporary files
+*.apk
+*.aab
+*.ipa
+*.tmp
+*.temp
+
+# Logs and crash dumps
+*.log
+*.dmp
+*.mdmp
+
+# OS metadata
+.DS_Store
+Thumbs.db
+Desktop.ini
