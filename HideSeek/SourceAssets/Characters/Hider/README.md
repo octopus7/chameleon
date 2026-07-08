@@ -3,7 +3,7 @@
 `SM_HiderMetaball_Body.obj` is a paintable body-shape prototype for the hider character.
 
 - Height: about 176 cm
-- Style: smooth metaball-like fused blobs
+- Style: smooth metaball-like T-pose with separated limb volumes
 - Material slot: `PaintableBody`
 - Intended use: broad, simple surfaces for camouflage painting tests
 

@@ -73,3 +73,60 @@
 - `UnrealEditor-Cmd.exe -run=ChameleonPainterBuildTestContent -unattended -nop4`를 실행해 `/Game/ChameleonPainterTest` 테스트 콘텐츠를 재생성했다.
 - 커맨드렛 결과는 0 errors, 기존 metaball degenerate triangle warning 2건으로 완료됐다.
 - AGENTS 지침에 따라 빌드와 콘텐츠 재생성 후 `HideSeek/HideSeek.uproject`를 Unreal Editor로 다시 열었다.
+
+## 2026-07-09 00:13:55 (소요시간: 00:03:00)
+
+- 페인팅 UX를 환경 색 자동 샘플링 중심에서 수동 브러시 색 선택 중심으로 조정했다.
+- `AChameleonHiderCharacter`가 생성하는 `UChameleonColorPickerWidget`은 더 이상 `UChameleonPaintComponent`를 직접 대상으로 잡지 않도록 바꿨다.
+- 컬러피커 슬라이더/스와치 변경은 몸 전체 기본색을 바꾸지 않고 `CurrentBrushColor`만 갱신하며, 좌클릭 paint stroke가 해당 브러시 색을 사용한다.
+- 컬러피커 표시 중에는 `FInputModeGameAndUI`, 숨김 상태에는 `FInputModeGameOnly`를 적용해 수동 색 선택 중 마우스 커서와 UI 입력이 동작하도록 했다.
+- 테스트 입력 매핑은 좌클릭 페인트, 우클릭/Tab 수동 컬러피커 토글, E 환경 색 샘플링으로 변경했다.
+- `ChameleonPainterBuildTestContent` 커맨드렛을 갱신하고 실행해 `IMC_ChameleonPlayer` 입력 애셋과 테스트 콘텐츠를 재생성했다.
+- 검증으로 일반 `Build.bat HideSeekEditor Win64 Development` 빌드와 `UnrealEditor-Cmd.exe -run=ChameleonPainterBuildTestContent -unattended -nop4` 커맨드렛이 성공했다.
+- AGENTS 지침에 따라 빌드와 콘텐츠 재생성 후 `HideSeek/HideSeek.uproject`를 Unreal Editor로 다시 열었다.
+
+## 2026-07-09 00:20:21 (소요시간: 00:06:04)
+
+- `UChameleonMetaballBodyComponent`에 루트, 머리, 목, 몸통 2단, 양팔 2단, 양다리 2단으로 구성된 최소 절차 본 목록을 추가했다.
+- 메타볼 절차 메시의 원본 바인드 포즈 정점과 애니메이션 정점을 분리하고, 정점별 최대 4개 본 가중치로 CPU 스키닝을 적용하도록 했다.
+- 캐릭터 이동 속도를 기반으로 걷기 블렌드와 위상 값을 계산하고, 다리 스윙, 무릎 굽힘, 반대 팔 스윙, 몸통 흔들림, 머리 보정, 상하 바운스를 절차적으로 적용했다.
+- 페인트 스트로크는 애니메이션된 표면 좌표를 가장 가까운 바인드 포즈 정점으로 되돌려 저장하도록 해, 메시가 걸어도 정점색 페인트가 원본 표면 기준으로 유지되게 했다.
+- 일반 샌드박스 빌드는 UnrealBuildTool의 AppData 로그 회전 권한 문제로 실패했고, 권한 상승 후 `Build.bat HideSeekEditor Win64 Development -Project=HideSeek.uproject -WaitMutex -NoHotReload` 빌드가 성공했다.
+- AGENTS 지침에 따라 성공 빌드 후 `HideSeek/HideSeek.uproject`를 Unreal Editor로 열었다.
+
+## 2026-07-09 00:36:17 (소요시간: 00:05:58)
+
+- 기존 메타볼 캐릭터가 팔다리와 몸통이 붙은 형태라 절차 본/걷기 애니메이션에 부적절하다는 요청을 반영했다.
+- `UChameleonMetaballBodyComponent`의 메타볼 중심점, 반경, 강도, 샘플 경계를 T 포즈 기준으로 재배치해 팔은 어깨 높이에서 좌우로 펼치고 다리는 골반 아래에서 좌우로 구분되도록 바꿨다.
+- T 포즈 폭에 맞춰 런타임 `GridResolution`을 `32,78,56`으로 조정하고, 절차 본 위치 및 정점 가중치 분류를 새 형태에 맞게 조정했다.
+- `generate-hider-metaball-body.mjs`에도 같은 메타볼 배치를 반영하고 `SM_HiderMetaball_Body.obj/.mtl`을 재생성했다.
+- OBJ 재생성 결과는 `Vertices: 27467`, `Faces: 54952`였다.
+- 열린 Unreal Editor의 Live Coding 세션 때문에 첫 일반 `Build.bat HideSeekEditor Win64 Development -Project=HideSeek.uproject -WaitMutex -NoHotReload` 빌드는 차단됐고, `-LiveCoding` 빌드로 `ChameleonMetaballBodyComponent.cpp` 컴파일 성공을 먼저 확인했다.
+- 사용자가 Unreal Editor를 닫은 뒤 일반 `Build.bat HideSeekEditor Win64 Development -Project=HideSeek.uproject -WaitMutex -NoHotReload` 빌드가 성공해 `UnrealEditor-ChameleonPainter.dll` 링크까지 확인했다.
+- AGENTS 지침에 따라 성공 빌드 후 `HideSeek/HideSeek.uproject`를 Unreal Editor로 다시 열었다.
+
+## 2026-07-09 00:44:51 (소요시간: 00:03:02)
+
+- `UChameleonMetaballBodyComponent`의 메타볼 blob마다 담당 절차 본 슬롯을 지정해, 정점 생성 시점에 field contribution 기반으로 skin weight를 계산하도록 바꿨다.
+- 기존처럼 최종 정점 위치로 왼다리/오른다리를 추정하지 않고, 각 정점이 어느 blob들의 합으로 만들어졌는지를 본별로 집계하도록 했다.
+- 중심선 근처에서는 반대쪽 사지 가중치를 0으로 차단하고, 어깨/골반 접합부는 같은 쪽 사지 본과 몸통/루트 본 사이에서 부드럽게 블렌딩하도록 했다.
+- 기존 위치 기반 `BuildSkinWeights` 로직은 정점 생성 시 가중치가 없는 경우에만 실행되는 fallback으로 남겼다.
+- 일반 `Build.bat HideSeekEditor Win64 Development -Project=HideSeek.uproject -WaitMutex -NoHotReload` 빌드가 성공해 `UnrealEditor-ChameleonPainter.dll` 링크까지 확인했다.
+- AGENTS 지침에 따라 성공 빌드 후 `HideSeek/HideSeek.uproject`를 Unreal Editor로 다시 열었다.
+
+## 2026-07-09 00:37:09 (소요시간: 00:14:39)
+
+- Tab 입력 시 커서만 보이고 채색 위젯이 보이지 않으며, 채색 UI가 실제 WBP로 구성되었는지 확인해 달라는 요청을 처리했다.
+- 기존 구현이 `UChameleonColorPickerWidget` 순수 C++ 위젯 fallback 중심이라 `/Game` 경로의 Widget Blueprint 애셋이 생성되지 않았음을 확인했다.
+- `ChameleonPainterBuildTestContent` 커맨드렛에 `/Game/ChameleonPainterTest/UI/WBP_ChameleonColorPicker` Widget Blueprint 생성 로직을 추가하고, 부모 클래스를 `UChameleonColorPickerWidget`으로 설정했다.
+- 생성된 WBP의 GeneratedClass를 `BP_ChameleonHiderCharacter.ColorPickerWidgetClass`에 할당해 캐릭터가 런타임에 WBP 기반 컬러피커를 생성하도록 연결했다.
+- 기본 C++ 위젯 트리에 반투명 패널 배경을 추가해 WBP/fallback 양쪽 모두에서 UI 영역이 눈에 보이도록 했다.
+- 컬러피커가 viewport 좌상단 `(24, 24)` 위치, `(320, 220)` 크기, z-order 100으로 배치되도록 조정했다.
+- 일반 `HideSeekEditor Win64 Development` 빌드가 성공했고, 사용자가 에디터를 닫은 뒤 `ChameleonPainterBuildTestContent` 커맨드렛을 다시 실행해 WBP 생성과 BP 연결을 완료했다.
+- 커맨드렛 결과는 0 errors, 기존 metaball degenerate triangle 경고 2건으로 완료되었고, AGENTS 지침에 따라 이후 Unreal Editor를 다시 열었다.
+
+## 2026-07-09 00:48:46 (소요시간: 00:02:52)
+
+- 현재 `HideSeek` 게임 상태를 기준으로 EOS 적용 계획 문서 `Docs/eos-integration-plan.md`를 작성했다.
+- 문서에는 현재 로컬 단일 플레이/채색 프로토타입 상태, 미구현 멀티플레이 요소, EOS 적용 전 선행 복제 작업, EOS 플러그인/설정/Developer Portal 단계, 세션/로비 연결 계획, 검증 계획과 리스크를 정리했다.
+- 공식 EOS 서비스/라이선스/시작 페이지 기준으로 무료 사용 범위, Developer Portal 설정 필요성, 콘솔 SDK 접근 요청 필요성을 반영했다.

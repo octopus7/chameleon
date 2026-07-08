@@ -311,10 +311,14 @@ void AChameleonHiderCharacter::EnsureColorPicker()
 	ColorPickerWidget = CreateWidget<UChameleonColorPickerWidget>(PlayerController, WidgetClass);
 	if (ColorPickerWidget)
 	{
-		ColorPickerWidget->SetTargetPaintComponent(PaintComponent);
+		ColorPickerWidget->SetTargetPaintComponent(nullptr);
+		ColorPickerWidget->bApplyChangesImmediately = false;
 		ColorPickerWidget->SetSelectedColor(CurrentBrushColor, false);
 		ColorPickerWidget->OnColorChanged.AddDynamic(this, &AChameleonHiderCharacter::HandlePickerColorChanged);
-		ColorPickerWidget->AddToViewport();
+		ColorPickerWidget->AddToViewport(100);
+		ColorPickerWidget->SetAlignmentInViewport(FVector2D::ZeroVector);
+		ColorPickerWidget->SetPositionInViewport(FVector2D(24.0f, 24.0f), false);
+		ColorPickerWidget->SetDesiredSizeInViewport(FVector2D(320.0f, 220.0f));
 	}
 }
 
@@ -331,5 +335,17 @@ void AChameleonHiderCharacter::SetColorPickerVisible(bool bVisible)
 	if (PlayerController)
 	{
 		PlayerController->bShowMouseCursor = bVisible;
+		if (bVisible)
+		{
+			FInputModeGameAndUI InputMode;
+			InputMode.SetHideCursorDuringCapture(false);
+			InputMode.SetLockMouseToViewportBehavior(EMouseLockMode::DoNotLock);
+			PlayerController->SetInputMode(InputMode);
+		}
+		else
+		{
+			FInputModeGameOnly InputMode;
+			PlayerController->SetInputMode(InputMode);
+		}
 	}
 }

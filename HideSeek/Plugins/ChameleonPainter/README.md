@@ -13,11 +13,14 @@ Runtime plugin for the Meccha Chameleon-style hider prototype.
 
 1. Place `AChameleonHiderBodyActor` in a level, or add `UChameleonMetaballBodyComponent` and `UChameleonPaintComponent` to an actor.
 2. Assign a body material that supports at least one vector parameter named `PaintColor`, `BodyColor`, `BaseColor`, or `Color`.
-3. Create `UChameleonColorPickerWidget` with `Create Widget`.
-4. Call `SetTargetPaintComponent` on the widget and pass the actor's `UChameleonPaintComponent`.
+3. Use `UChameleonColorPickerWidget` to choose the active brush color.
+4. Paint strokes with `ApplyPaintStrokeFromHit`, `ApplyPaintStrokeWorld`, or `ApplyPaintStrokeLocal`.
 
 `UChameleonMetaballBodyComponent` also writes vertex colors for `ClearPaint`, `SetCamouflageBaseColor`, and paint strokes.
 For visible per-vertex stroke painting, use a material that reads vertex color.
+
+The generated test input uses left mouse to paint, right mouse or Tab to open the manual brush color picker, and E as the optional environment color sampler.
+`SetTargetPaintComponent` is still available when a widget should directly change an actor's whole-body/base paint color, but the hider character keeps the picker separate and uses it only as the brush color source.
 
 ## Paint API
 

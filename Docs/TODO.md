@@ -10,7 +10,7 @@ Meccha Chameleon 스타일 위장 게임 프로토타입의 다음 작업 후보
 | Done | 플레이어 캐릭터에 hider body와 color picker 연결 | `AChameleonHiderCharacter`, `BP_ChameleonHiderCharacter` |
 | Done | 입력을 캐릭터 BP에 직접 연결하지 않고 DA/GameInstance 경유 | `DA_ChameleonPainterInputConfig`, `BP_ChameleonPainterGameInstance` |
 | Done | WASD 이동, Space 점프, Mouse 시점 3인칭 조작 | `IA_Move`, `IA_Look`, `IA_Jump`, `IMC_ChameleonPlayer` |
-| Done | 브러시 입력과 배경 색 샘플링 | `IA_Paint`, `IA_SampleColor`, `AChameleonHiderCharacter` trace 처리 |
+| Done | 브러시 입력, 수동 색 선택, 배경 색 샘플링 | 좌클릭 페인트, 우클릭/Tab 수동 컬러피커, E 샘플링 |
 
 ## 우선순위 기준
 
@@ -22,7 +22,7 @@ Meccha Chameleon 스타일 위장 게임 프로토타입의 다음 작업 후보
 
 | 우선순위 | 작업 | 이유 | 완료 기준 |
 | --- | --- | --- | --- |
-| P0 | PIE 조작 검증과 입력 모드 조정 | 캐릭터, DA, GameInstance, color picker가 실제 PIE에서 함께 움직이는지 확인해야 한다. | PIE에서 WASD/Space/Mouse, 좌클릭 페인트, 우클릭/E 샘플링, Tab 위젯 토글이 충돌 없이 동작한다. |
+| P0 | PIE 조작 검증과 입력 모드 조정 | 캐릭터, DA, GameInstance, color picker가 실제 PIE에서 함께 움직이는지 확인해야 한다. | PIE에서 WASD/Space/Mouse, 좌클릭 페인트, 우클릭/Tab 수동 컬러피커, E 샘플링이 충돌 없이 동작한다. |
 | P0 | 브러시 UX 튜닝 | 현재 브러시 반경/강도는 C++ 기본값이다. 플레이 감각에 맞는 조절 UI나 기본값이 필요하다. | 반경/강도 값을 조정할 수 있고, 페인트 흔적이 의도한 크기와 속도로 누적된다. |
 | P0 | 헌터 판정 최소 프로토타입 | 숨는 쪽만 있으면 게임 루프가 닫히지 않는다. | 헌터 입력 또는 테스트 액터 trace가 hider 적중을 판정하고 로그/상태로 확인된다. |
 | P0 | 라운드 흐름 최소 구현 | 숨기 시간, 찾기 시간, 승패가 있어야 테스트가 반복 가능하다. | 준비, 숨기, 탐색, 결과 상태가 GameMode/GameState에서 전환된다. |

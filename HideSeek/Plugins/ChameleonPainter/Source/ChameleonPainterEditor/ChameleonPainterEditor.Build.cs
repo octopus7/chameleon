@@ -27,6 +27,7 @@ public class ChameleonPainterEditor : ModuleRules
 				"Slate",
 				"SlateCore",
 				"UMG",
+				"UMGEditor",
 				"UnrealEd"
 			});
 	}

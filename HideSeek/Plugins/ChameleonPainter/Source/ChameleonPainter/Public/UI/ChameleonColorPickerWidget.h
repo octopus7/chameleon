@@ -88,6 +88,8 @@ protected:
 
 private:
 	void BuildDefaultWidgetTree();
+	void BindGeneratedWidgetTree();
+	void BindSwatchButton(const FName& WidgetName, int32 SwatchIndex);
 	void ApplySelectedColor(bool bBroadcast, bool bCommit);
 	void UpdateControlsFromSelectedColor();
 	void ChooseSwatch(int32 SwatchIndex);
@@ -95,19 +97,19 @@ private:
 	USlider* MakeSlider(const FName& Name, float Value);
 	UButton* MakeSwatchButton(const FName& Name, int32 SwatchIndex);
 
-	UPROPERTY(Transient)
+	UPROPERTY(Transient, meta = (BindWidgetOptional))
 	TObjectPtr<UBorder> PreviewBorder;
 
-	UPROPERTY(Transient)
+	UPROPERTY(Transient, meta = (BindWidgetOptional))
 	TObjectPtr<USlider> RedSlider;
 
-	UPROPERTY(Transient)
+	UPROPERTY(Transient, meta = (BindWidgetOptional))
 	TObjectPtr<USlider> GreenSlider;
 
-	UPROPERTY(Transient)
+	UPROPERTY(Transient, meta = (BindWidgetOptional))
 	TObjectPtr<USlider> BlueSlider;
 
-	UPROPERTY(Transient)
+	UPROPERTY(Transient, meta = (BindWidgetOptional))
 	TObjectPtr<UButton> CommitButton;
 
 	bool bUpdatingControls = false;

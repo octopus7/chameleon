@@ -34,8 +34,103 @@ void UChameleonColorPickerWidget::NativeConstruct()
 		BuildDefaultWidgetTree();
 	}
 
+	BindGeneratedWidgetTree();
 	UpdateControlsFromSelectedColor();
 	ApplySelectedColor(false, false);
+}
+
+void UChameleonColorPickerWidget::BindGeneratedWidgetTree()
+{
+	if (!WidgetTree)
+	{
+		return;
+	}
+
+	if (!PreviewBorder)
+	{
+		PreviewBorder = Cast<UBorder>(WidgetTree->FindWidget(FName(TEXT("ColorPreview"))));
+	}
+	if (!RedSlider)
+	{
+		RedSlider = Cast<USlider>(WidgetTree->FindWidget(FName(TEXT("RedSlider"))));
+	}
+	if (!GreenSlider)
+	{
+		GreenSlider = Cast<USlider>(WidgetTree->FindWidget(FName(TEXT("GreenSlider"))));
+	}
+	if (!BlueSlider)
+	{
+		BlueSlider = Cast<USlider>(WidgetTree->FindWidget(FName(TEXT("BlueSlider"))));
+	}
+	if (!CommitButton)
+	{
+		CommitButton = Cast<UButton>(WidgetTree->FindWidget(FName(TEXT("CommitButton"))));
+	}
+
+	if (RedSlider)
+	{
+		RedSlider->OnValueChanged.AddUniqueDynamic(this, &UChameleonColorPickerWidget::HandleRedChanged);
+	}
+	if (GreenSlider)
+	{
+		GreenSlider->OnValueChanged.AddUniqueDynamic(this, &UChameleonColorPickerWidget::HandleGreenChanged);
+	}
+	if (BlueSlider)
+	{
+		BlueSlider->OnValueChanged.AddUniqueDynamic(this, &UChameleonColorPickerWidget::HandleBlueChanged);
+	}
+	if (CommitButton)
+	{
+		CommitButton->OnClicked.AddUniqueDynamic(this, &UChameleonColorPickerWidget::HandleCommitClicked);
+	}
+
+	BindSwatchButton(FName(TEXT("Swatch0")), 0);
+	BindSwatchButton(FName(TEXT("Swatch1")), 1);
+	BindSwatchButton(FName(TEXT("Swatch2")), 2);
+	BindSwatchButton(FName(TEXT("Swatch3")), 3);
+	BindSwatchButton(FName(TEXT("Swatch4")), 4);
+	BindSwatchButton(FName(TEXT("Swatch5")), 5);
+	BindSwatchButton(FName(TEXT("Swatch6")), 6);
+	BindSwatchButton(FName(TEXT("Swatch7")), 7);
+}
+
+void UChameleonColorPickerWidget::BindSwatchButton(const FName& WidgetName, int32 SwatchIndex)
+{
+	UButton* SwatchButton = WidgetTree ? Cast<UButton>(WidgetTree->FindWidget(WidgetName)) : nullptr;
+	if (!SwatchButton)
+	{
+		return;
+	}
+
+	switch (SwatchIndex)
+	{
+	case 0:
+		SwatchButton->OnClicked.AddUniqueDynamic(this, &UChameleonColorPickerWidget::HandleSwatch0Clicked);
+		break;
+	case 1:
+		SwatchButton->OnClicked.AddUniqueDynamic(this, &UChameleonColorPickerWidget::HandleSwatch1Clicked);
+		break;
+	case 2:
+		SwatchButton->OnClicked.AddUniqueDynamic(this, &UChameleonColorPickerWidget::HandleSwatch2Clicked);
+		break;
+	case 3:
+		SwatchButton->OnClicked.AddUniqueDynamic(this, &UChameleonColorPickerWidget::HandleSwatch3Clicked);
+		break;
+	case 4:
+		SwatchButton->OnClicked.AddUniqueDynamic(this, &UChameleonColorPickerWidget::HandleSwatch4Clicked);
+		break;
+	case 5:
+		SwatchButton->OnClicked.AddUniqueDynamic(this, &UChameleonColorPickerWidget::HandleSwatch5Clicked);
+		break;
+	case 6:
+		SwatchButton->OnClicked.AddUniqueDynamic(this, &UChameleonColorPickerWidget::HandleSwatch6Clicked);
+		break;
+	case 7:
+		SwatchButton->OnClicked.AddUniqueDynamic(this, &UChameleonColorPickerWidget::HandleSwatch7Clicked);
+		break;
+	default:
+		break;
+	}
 }
 
 void UChameleonColorPickerWidget::SetSelectedColor(FLinearColor NewColor, bool bBroadcast)
@@ -144,8 +239,13 @@ void UChameleonColorPickerWidget::BuildDefaultWidgetTree()
 		return;
 	}
 
+	UBorder* PanelBorder = WidgetTree->ConstructWidget<UBorder>(UBorder::StaticClass(), TEXT("BrushColorPanel"));
+	PanelBorder->SetBrushColor(FLinearColor(0.02f, 0.025f, 0.028f, 0.92f));
+	PanelBorder->SetPadding(FMargin(12.0f));
+	WidgetTree->RootWidget = PanelBorder;
+
 	UVerticalBox* RootBox = WidgetTree->ConstructWidget<UVerticalBox>(UVerticalBox::StaticClass(), TEXT("ColorPickerRoot"));
-	WidgetTree->RootWidget = RootBox;
+	PanelBorder->SetContent(RootBox);
 
 	USizeBox* PreviewSizeBox = WidgetTree->ConstructWidget<USizeBox>(USizeBox::StaticClass(), TEXT("PreviewSize"));
 	PreviewSizeBox->SetHeightOverride(30.0f);

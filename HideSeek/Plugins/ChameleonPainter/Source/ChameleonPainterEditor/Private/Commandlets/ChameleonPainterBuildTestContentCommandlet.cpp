@@ -42,7 +42,9 @@
 #include "MaterialEditingLibrary.h"
 #include "Misc/ConfigCacheIni.h"
 #include "Misc/PackageName.h"
+#include "UI/ChameleonColorPickerWidget.h"
 #include "UObject/SavePackage.h"
+#include "WidgetBlueprint.h"
 
 DEFINE_LOG_CATEGORY_STATIC(LogChameleonPainterContent, Log, All);
 
@@ -53,6 +55,7 @@ const FString TexturePath = RootPath / TEXT("Textures");
 const FString MaterialPath = RootPath / TEXT("Materials");
 const FString InputPath = RootPath / TEXT("Input");
 const FString BlueprintPath = RootPath / TEXT("Blueprints");
+const FString UIPath = RootPath / TEXT("UI");
 const FString MapPath = RootPath / TEXT("Maps");
 
 FString ToObjectPath(const FString& PackageName)
@@ -316,8 +319,8 @@ UChameleonPainterInputConfig* CreateInputAssets()
 
 	MapKey(MappingContext, JumpAction, EKeys::SpaceBar);
 	MapKey(MappingContext, PaintAction, EKeys::LeftMouseButton);
-	MapKey(MappingContext, SampleColorAction, EKeys::RightMouseButton);
 	MapKey(MappingContext, SampleColorAction, EKeys::E);
+	MapKey(MappingContext, ToggleColorPickerAction, EKeys::RightMouseButton);
 	MapKey(MappingContext, ToggleColorPickerAction, EKeys::Tab);
 
 	MappingContext->MarkPackageDirty();
@@ -366,8 +369,46 @@ UBlueprint* FindOrCreateBlueprint(const FString& PackageName, UClass* ParentClas
 	return Blueprint;
 }
 
+UWidgetBlueprint* FindOrCreateColorPickerWidgetBlueprint()
+{
+	const FString PackageName = UIPath / TEXT("WBP_ChameleonColorPicker");
+	if (UWidgetBlueprint* ExistingWidgetBlueprint = LoadAssetByPackageName<UWidgetBlueprint>(PackageName))
+	{
+		if (ExistingWidgetBlueprint->ParentClass != UChameleonColorPickerWidget::StaticClass())
+		{
+			ExistingWidgetBlueprint->ParentClass = UChameleonColorPickerWidget::StaticClass();
+			FBlueprintEditorUtils::MarkBlueprintAsStructurallyModified(ExistingWidgetBlueprint);
+		}
+		FKismetEditorUtilities::CompileBlueprint(ExistingWidgetBlueprint);
+		SavePackageForObject(ExistingWidgetBlueprint);
+		return ExistingWidgetBlueprint;
+	}
+
+	UPackage* Package = CreatePackage(*PackageName);
+	Package->FullyLoad();
+	const FName AssetName(*FPackageName::GetLongPackageAssetName(PackageName));
+	UWidgetBlueprint* WidgetBlueprint = Cast<UWidgetBlueprint>(FKismetEditorUtilities::CreateBlueprint(
+		UChameleonColorPickerWidget::StaticClass(),
+		Package,
+		AssetName,
+		BPTYPE_Normal,
+		UWidgetBlueprint::StaticClass(),
+		UWidgetBlueprintGeneratedClass::StaticClass()));
+	if (WidgetBlueprint)
+	{
+		FAssetRegistryModule::AssetCreated(WidgetBlueprint);
+		FKismetEditorUtilities::CompileBlueprint(WidgetBlueprint);
+		WidgetBlueprint->MarkPackageDirty();
+		SavePackageForObject(WidgetBlueprint);
+	}
+
+	return WidgetBlueprint;
+}
+
 void ConfigureBlueprints(UChameleonPainterInputConfig* InputConfig, UMaterialInterface* HiderMaterial, UClass*& OutGameModeClass)
 {
+	UWidgetBlueprint* ColorPickerWidgetBlueprint = FindOrCreateColorPickerWidgetBlueprint();
+
 	UBlueprint* CharacterBlueprint = FindOrCreateBlueprint(BlueprintPath / TEXT("BP_ChameleonHiderCharacter"), AChameleonHiderCharacter::StaticClass());
 	if (AChameleonHiderCharacter* CharacterCDO = CharacterBlueprint && CharacterBlueprint->GeneratedClass
 		? Cast<AChameleonHiderCharacter>(CharacterBlueprint->GeneratedClass->GetDefaultObject())
@@ -377,6 +418,10 @@ void ConfigureBlueprints(UChameleonPainterInputConfig* InputConfig, UMaterialInt
 		{
 			CharacterCDO->BodyComponent->BodyMaterial = HiderMaterial;
 		}
+		UClass* ColorPickerWidgetClass = ColorPickerWidgetBlueprint && ColorPickerWidgetBlueprint->GeneratedClass
+			? static_cast<UClass*>(ColorPickerWidgetBlueprint->GeneratedClass.Get())
+			: UChameleonColorPickerWidget::StaticClass();
+		CharacterCDO->ColorPickerWidgetClass = TSubclassOf<UChameleonColorPickerWidget>(ColorPickerWidgetClass);
 		CharacterCDO->CurrentBrushColor = FLinearColor(0.84f, 0.82f, 0.76f, 1.0f);
 		CharacterCDO->MarkPackageDirty();
 		FBlueprintEditorUtils::MarkBlueprintAsModified(CharacterBlueprint);
@@ -431,7 +476,7 @@ void ConfigureBlueprints(UChameleonPainterInputConfig* InputConfig, UMaterialInt
 	GConfig->Flush(false, GEngineIni);
 	MapsSettings->SaveConfig();
 
-	SaveAssets({ CharacterBlueprint, GameModeBlueprint, GameInstanceBlueprint });
+	SaveAssets({ ColorPickerWidgetBlueprint, CharacterBlueprint, GameModeBlueprint, GameInstanceBlueprint });
 }
 
 AStaticMeshActor* SpawnStaticMeshActor(UWorld* World, UStaticMesh* Mesh, UMaterialInterface* Material, const FVector& Location, const FRotator& Rotation, const FVector& Scale, const FString& Label)
