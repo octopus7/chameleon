@@ -15,6 +15,13 @@ class UChameleonPaintComponent;
 class UMaterialInterface;
 class USpringArmComponent;
 
+UENUM(BlueprintType)
+enum class EChameleonColorPickSource : uint8
+{
+	SurfaceData,
+	FinalScreen
+};
+
 UCLASS(BlueprintType, Blueprintable)
 class CHAMELEONPAINTER_API AChameleonHiderCharacter : public ACharacter
 {
@@ -95,6 +102,12 @@ public:
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Chameleon|Paint")
 	TArray<FName> SampleColorParameterNames;
 
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Chameleon|Paint")
+	EChameleonColorPickSource ColorPickSource = EChameleonColorPickSource::SurfaceData;
+
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Chameleon|UI", meta = (ClampMin = "24.0", ClampMax = "128.0"))
+	float EyedropperCursorSizePixels = 64.0f;
+
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Chameleon|Paint|Effects")
 	TSubclassOf<AChameleonPaintSprayActor> PaintSprayEffectClass;
 
@@ -130,11 +143,19 @@ protected:
 	UFUNCTION()
 	void HandlePickerMaterialPropertiesChanged(float Roughness, float Metallic);
 
+	UFUNCTION()
+	void HandlePickerEyedropperModeChanged(bool bActive);
+
 private:
 	void AddMappingContext();
 	void BindEnhancedInput(UInputComponent* PlayerInputComponent);
 	bool TraceFromView(float Distance, FHitResult& OutHit, bool bTraceSelfBody) const;
 	bool TrySampleColorFromHit(const FHitResult& Hit, FLinearColor& OutColor) const;
+	bool TrySampleSurfaceDataColor(FLinearColor& OutColor) const;
+	bool TrySampleFinalScreenColor(FLinearColor& OutColor) const;
+	bool TrySampleEyedropperColor(FLinearColor& OutColor) const;
+	void UpdateEyedropperPreviewColor();
+	void PickEyedropperColor();
 	void SpawnPaintSprayEffect(const FHitResult& Hit);
 	void EnsureColorPicker();
 	void EnsureBrushCursor();
@@ -142,6 +163,7 @@ private:
 	void AdjustBrushSize(float DeltaRadiusCm);
 	float CalculateBrushCursorDiameterPixels(const APlayerController& PlayerController) const;
 	void SetColorPickerVisible(bool bVisible);
+	void SetEyedropperModeActive(bool bActive);
 
 	UPROPERTY(Transient)
 	TObjectPtr<UChameleonPainterInputConfig> InputConfig;
@@ -154,5 +176,8 @@ private:
 
 	bool bPaintHeld = false;
 	bool bColorPickerVisible = false;
+	bool bEyedropperModeActive = false;
+	bool bHasEyedropperPreviewColor = false;
+	FLinearColor EyedropperPreviewColor = FLinearColor::Transparent;
 	double LastPaintSpraySpawnTimeSeconds = -1000.0;
 };

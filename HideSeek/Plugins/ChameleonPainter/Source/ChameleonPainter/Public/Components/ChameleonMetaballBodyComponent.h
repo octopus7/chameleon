@@ -107,6 +107,9 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "Chameleon|Paint")
 	bool ApplyPaintStrokeFromHit(const FHitResult& Hit, float RadiusCm, FLinearColor Color, float Strength = 1.0f, float Roughness = 0.84f, float Metallic = 0.0f);
 
+	UFUNCTION(BlueprintCallable, Category = "Chameleon|Paint")
+	bool TrySampleBaseColorFromHit(const FHitResult& Hit, FLinearColor& OutColor) const;
+
 	UFUNCTION(BlueprintPure, Category = "Chameleon|Paint")
 	FLinearColor GetCamouflageBaseColor() const { return CamouflageBaseColor; }
 

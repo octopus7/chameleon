@@ -117,6 +117,7 @@ void UChameleonColorPickerWidget::NativeConstruct()
 
 	BindGeneratedWidgetTree();
 	UpdateControlsFromSelectedColor();
+	UpdateEyedropperButtonState();
 	UpdateHistoryButtons();
 	ApplySelectedColor(false, false);
 	ApplySelectedMaterialProperties(false, false);
@@ -205,6 +206,24 @@ void UChameleonColorPickerWidget::BindGeneratedWidgetTree()
 	{
 		CommitButton = Cast<UButton>(WidgetTree->FindWidget(FName(TEXT("CommitButton"))));
 	}
+	if (!EyedropperButton)
+	{
+		EyedropperButton = Cast<UButton>(WidgetTree->FindWidget(FName(TEXT("EyedropperButton"))));
+	}
+	if (!EyedropperButton)
+	{
+		if (UHorizontalBox* HeaderRow = Cast<UHorizontalBox>(WidgetTree->FindWidget(FName(TEXT("HeaderRow")))))
+		{
+			EyedropperButton = WidgetTree->ConstructWidget<UButton>(UButton::StaticClass(), TEXT("EyedropperButton"));
+			EyedropperButton->SetContent(MakeLabel(FText::FromString(TEXT("Pick")), 15.0f));
+			EyedropperButton->SetToolTipText(FText::FromString(TEXT("Sample color")));
+			USizeBox* EyedropperSize = WidgetTree->ConstructWidget<USizeBox>(USizeBox::StaticClass(), TEXT("EyedropperButtonSize"));
+			EyedropperSize->SetWidthOverride(54.0f);
+			EyedropperSize->SetHeightOverride(42.0f);
+			EyedropperSize->SetContent(EyedropperButton);
+			HeaderRow->AddChildToHorizontalBox(EyedropperSize);
+		}
+	}
 
 	if (HSVWheel)
 	{
@@ -277,6 +296,10 @@ void UChameleonColorPickerWidget::BindGeneratedWidgetTree()
 	if (CommitButton)
 	{
 		CommitButton->OnClicked.AddUniqueDynamic(this, &UChameleonColorPickerWidget::HandleCommitClicked);
+	}
+	if (EyedropperButton)
+	{
+		EyedropperButton->OnClicked.AddUniqueDynamic(this, &UChameleonColorPickerWidget::HandleEyedropperClicked);
 	}
 
 	for (int32 Index = 0; Index < ColorHistoryCount; ++Index)
@@ -352,6 +375,22 @@ void UChameleonColorPickerWidget::SetSelectedMaterialProperties(float NewRoughne
 
 	UpdateControlsFromSelectedColor();
 	ApplySelectedMaterialProperties(bBroadcast, false);
+}
+
+void UChameleonColorPickerWidget::SetEyedropperModeActive(bool bActive, bool bBroadcast)
+{
+	if (bEyedropperModeActive == bActive)
+	{
+		UpdateEyedropperButtonState();
+		return;
+	}
+
+	bEyedropperModeActive = bActive;
+	UpdateEyedropperButtonState();
+	if (bBroadcast)
+	{
+		OnEyedropperModeChanged.Broadcast(bEyedropperModeActive);
+	}
 }
 
 void UChameleonColorPickerWidget::SetTargetPaintComponent(UChameleonPaintComponent* NewTargetPaintComponent)
@@ -583,6 +622,11 @@ void UChameleonColorPickerWidget::HandleCommitClicked()
 	ApplySelectedMaterialProperties(true, true);
 }
 
+void UChameleonColorPickerWidget::HandleEyedropperClicked()
+{
+	SetEyedropperModeActive(!bEyedropperModeActive, true);
+}
+
 void UChameleonColorPickerWidget::HandleHistory0Clicked() { ChooseHistory(0); }
 void UChameleonColorPickerWidget::HandleHistory1Clicked() { ChooseHistory(1); }
 void UChameleonColorPickerWidget::HandleHistory2Clicked() { ChooseHistory(2); }
@@ -626,8 +670,21 @@ void UChameleonColorPickerWidget::BuildDefaultWidgetTree()
 	UVerticalBox* RootBox = WidgetTree->ConstructWidget<UVerticalBox>(UVerticalBox::StaticClass(), TEXT("ColorPickerRoot"));
 	PanelBorder->SetContent(RootBox);
 
+	UHorizontalBox* HeaderRow = WidgetTree->ConstructWidget<UHorizontalBox>(UHorizontalBox::StaticClass(), TEXT("HeaderRow"));
 	UTextBlock* TitleText = MakeLabel(FText::FromString(TEXT("Paint")), 31.0f);
-	if (UVerticalBoxSlot* TitleSlot = RootBox->AddChildToVerticalBox(TitleText))
+	if (UHorizontalBoxSlot* TitleSlot = HeaderRow->AddChildToHorizontalBox(TitleText))
+	{
+		TitleSlot->SetSize(FSlateChildSize(ESlateSizeRule::Fill));
+	}
+	EyedropperButton = WidgetTree->ConstructWidget<UButton>(UButton::StaticClass(), TEXT("EyedropperButton"));
+	EyedropperButton->SetContent(MakeLabel(FText::FromString(TEXT("Pick")), 15.0f));
+	EyedropperButton->SetToolTipText(FText::FromString(TEXT("Sample color")));
+	USizeBox* EyedropperSize = WidgetTree->ConstructWidget<USizeBox>(USizeBox::StaticClass(), TEXT("EyedropperButtonSize"));
+	EyedropperSize->SetWidthOverride(54.0f);
+	EyedropperSize->SetHeightOverride(42.0f);
+	EyedropperSize->SetContent(EyedropperButton);
+	HeaderRow->AddChildToHorizontalBox(EyedropperSize);
+	if (UVerticalBoxSlot* TitleSlot = RootBox->AddChildToVerticalBox(HeaderRow))
 	{
 		TitleSlot->SetPadding(FMargin(0.0f, 0.0f, 0.0f, 10.0f));
 	}
@@ -961,6 +1018,18 @@ void UChameleonColorPickerWidget::UpdateControlsFromSelectedColor()
 	{
 		MetallicValueBox->SetValue(UnitToByte(SelectedMetallic));
 	}
+}
+
+void UChameleonColorPickerWidget::UpdateEyedropperButtonState()
+{
+	if (!EyedropperButton)
+	{
+		return;
+	}
+
+	EyedropperButton->SetBackgroundColor(bEyedropperModeActive
+		? FLinearColor(0.0f, 0.54f, 0.95f, 1.0f)
+		: FLinearColor(0.075f, 0.09f, 0.11f, 1.0f));
 }
 
 void UChameleonColorPickerWidget::UpdateHistoryButtons()

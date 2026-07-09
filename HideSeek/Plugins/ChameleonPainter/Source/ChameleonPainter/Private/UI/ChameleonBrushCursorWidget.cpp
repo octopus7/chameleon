@@ -1,6 +1,7 @@
 #include "UI/ChameleonBrushCursorWidget.h"
 
 #include "Rendering/DrawElements.h"
+#include "Styling/CoreStyle.h"
 
 namespace
 {
@@ -27,6 +28,25 @@ void UChameleonBrushCursorWidget::SetPreviewDiameterPixels(float InDiameterPixel
 	InvalidateLayoutAndVolatility();
 }
 
+void UChameleonBrushCursorWidget::SetCursorMode(EChameleonBrushCursorMode InCursorMode)
+{
+	if (CursorMode == InCursorMode)
+	{
+		return;
+	}
+
+	CursorMode = InCursorMode;
+	InvalidateLayoutAndVolatility();
+}
+
+void UChameleonBrushCursorWidget::SetSamplePreviewColor(FLinearColor InPreviewColor, bool bInHasPreviewColor)
+{
+	InPreviewColor.A = 1.0f;
+	SamplePreviewColor = InPreviewColor;
+	bHasSamplePreviewColor = bInHasPreviewColor;
+	Invalidate(EInvalidateWidgetReason::Paint);
+}
+
 int32 UChameleonBrushCursorWidget::NativePaint(
 	const FPaintArgs& Args,
 	const FGeometry& AllottedGeometry,
@@ -42,6 +62,62 @@ int32 UChameleonBrushCursorWidget::NativePaint(
 	if (Diameter <= 2.0f)
 	{
 		return PaintedLayer;
+	}
+
+	if (CursorMode == EChameleonBrushCursorMode::Eyedropper)
+	{
+		const float Scale = FMath::Max(Diameter / 64.0f, 0.25f);
+		const FVector2D Tip(12.0f * Scale, 50.0f * Scale);
+		const FVector2D End(48.0f * Scale, 14.0f * Scale);
+		const FVector2D Neck(36.0f * Scale, 26.0f * Scale);
+		TArray<FVector2D> OuterPoints;
+		OuterPoints.Add(Tip);
+		OuterPoints.Add(Neck);
+		OuterPoints.Add(End);
+		FSlateDrawElement::MakeLines(
+			OutDrawElements,
+			PaintedLayer + 1,
+			AllottedGeometry.ToPaintGeometry(),
+			OuterPoints,
+			ESlateDrawEffect::None,
+			FLinearColor(0.0f, 0.0f, 0.0f, 0.95f),
+			true,
+			7.0f * Scale);
+
+		TArray<FVector2D> InnerPoints;
+		InnerPoints.Add(Tip);
+		InnerPoints.Add(Neck);
+		InnerPoints.Add(End);
+		FSlateDrawElement::MakeLines(
+			OutDrawElements,
+			PaintedLayer + 2,
+			AllottedGeometry.ToPaintGeometry(),
+			InnerPoints,
+			ESlateDrawEffect::None,
+			FLinearColor(0.94f, 0.96f, 1.0f, 0.98f),
+			true,
+			3.0f * Scale);
+
+		const FVector2D SampleBoxPosition(38.0f * Scale, 40.0f * Scale);
+		const FVector2D SampleBoxSize(18.0f * Scale, 18.0f * Scale);
+		const FSlateBrush* FillBrush = FCoreStyle::Get().GetBrush(TEXT("WhiteBrush"));
+		const FLinearColor SampleColor = bHasSamplePreviewColor ? SamplePreviewColor : FLinearColor(0.12f, 0.12f, 0.12f, 0.92f);
+		FSlateDrawElement::MakeBox(
+			OutDrawElements,
+			PaintedLayer + 3,
+			AllottedGeometry.ToPaintGeometry(SampleBoxSize + FVector2D(4.0f * Scale, 4.0f * Scale), FSlateLayoutTransform(SampleBoxPosition - FVector2D(2.0f * Scale, 2.0f * Scale))),
+			FillBrush,
+			ESlateDrawEffect::None,
+			FLinearColor(0.0f, 0.0f, 0.0f, 0.92f));
+		FSlateDrawElement::MakeBox(
+			OutDrawElements,
+			PaintedLayer + 4,
+			AllottedGeometry.ToPaintGeometry(SampleBoxSize, FSlateLayoutTransform(SampleBoxPosition)),
+			FillBrush,
+			ESlateDrawEffect::None,
+			SampleColor);
+
+		return PaintedLayer + 4;
 	}
 
 	const float MaxStrokeThickness = FMath::Max(OuterStrokeThickness, InnerStrokeThickness);

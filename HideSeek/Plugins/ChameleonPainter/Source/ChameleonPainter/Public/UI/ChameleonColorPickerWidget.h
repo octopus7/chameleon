@@ -14,6 +14,7 @@ class UTextBlock;
 
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FChameleonColorPickerChanged, FLinearColor, Color);
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FChameleonPaintMaterialPropertiesChanged, float, Roughness, float, Metallic);
+DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FChameleonEyedropperModeChanged, bool, bActive);
 
 UCLASS(BlueprintType, Blueprintable)
 class CHAMELEONPAINTER_API UChameleonColorPickerWidget : public UUserWidget
@@ -31,8 +32,14 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "Chameleon|Color Picker")
 	void SetSelectedMaterialProperties(float NewRoughness, float NewMetallic, bool bBroadcast = true);
 
+	UFUNCTION(BlueprintCallable, Category = "Chameleon|Color Picker")
+	void SetEyedropperModeActive(bool bActive, bool bBroadcast = false);
+
 	UFUNCTION(BlueprintPure, Category = "Chameleon|Color Picker")
 	FLinearColor GetSelectedColor() const { return SelectedColor; }
+
+	UFUNCTION(BlueprintPure, Category = "Chameleon|Color Picker")
+	bool IsEyedropperModeActive() const { return bEyedropperModeActive; }
 
 	UFUNCTION(BlueprintCallable, Category = "Chameleon|Color Picker")
 	void SetTargetPaintComponent(UChameleonPaintComponent* NewTargetPaintComponent);
@@ -66,6 +73,9 @@ public:
 
 	UPROPERTY(BlueprintAssignable, Category = "Chameleon|Color Picker")
 	FChameleonPaintMaterialPropertiesChanged OnMaterialPropertiesCommitted;
+
+	UPROPERTY(BlueprintAssignable, Category = "Chameleon|Color Picker")
+	FChameleonEyedropperModeChanged OnEyedropperModeChanged;
 
 protected:
 	UFUNCTION()
@@ -121,6 +131,9 @@ protected:
 
 	UFUNCTION()
 	void HandleCommitClicked();
+
+	UFUNCTION()
+	void HandleEyedropperClicked();
 
 	UFUNCTION()
 	void HandleHistory0Clicked();
@@ -193,6 +206,7 @@ private:
 	void ApplySelectedColor(bool bBroadcast, bool bCommit);
 	void ApplySelectedMaterialProperties(bool bBroadcast, bool bCommit);
 	void UpdateControlsFromSelectedColor();
+	void UpdateEyedropperButtonState();
 	void UpdateHistoryButtons();
 	void RecordHistoryColor(FLinearColor NewColor);
 	void ChooseSwatch(int32 SwatchIndex);
@@ -262,8 +276,12 @@ private:
 	UPROPERTY(Transient, meta = (BindWidgetOptional))
 	TObjectPtr<UButton> CommitButton;
 
+	UPROPERTY(Transient, meta = (BindWidgetOptional))
+	TObjectPtr<UButton> EyedropperButton;
+
 	UPROPERTY(Transient)
 	TArray<FLinearColor> ColorHistory;
 
 	bool bUpdatingControls = false;
+	bool bEyedropperModeActive = false;
 };

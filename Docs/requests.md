@@ -336,3 +336,15 @@
 - 페인트 모드에 아이드로퍼 추출 모드를 추가하기 위한 구현 계획을 수립했다.
 - 기본 샘플링은 레벨 오브젝트의 원래 색/페인트 텍스처 데이터를 raycast와 UV 기반으로 읽는 방식으로 두고, 추후 최종 화면색 back buffer/readback 샘플링으로 전환 가능한 추상화 구조를 계획했다.
 - imagegen으로 만든 아이드로퍼 아이콘 버튼, 추출 모드 토글, 고정 크기 아이드로퍼 커서, hover 색상 미리보기, 클릭 시 현재 채색 색상 갱신 흐름을 계획 범위에 포함했다.
+
+## 2026-07-09 15:56:00 (소요시간: 03:24:46)
+
+- imagegen으로 생성한 아이드로퍼 아이콘을 `HideSeek/SourceAssets/UI/ChameleonPainter/T_ChameleonEyedropperIcon.png`에 추가했다.
+- `ChameleonPainterBuildTestContent` 커맨드렛이 아이드로퍼 아이콘을 UI 텍스처로 임포트하고, `WBP_ChameleonColorPicker` 헤더에 이미지 아이콘 기반 `EyedropperButton`을 직접 생성하도록 확장했다.
+- `UChameleonColorPickerWidget`에 아이드로퍼 토글 상태, `OnEyedropperModeChanged` 델리게이트, 버튼 활성 배경색 갱신, 오래된 WBP를 위한 런타임 fallback 버튼 삽입을 추가했다.
+- `AChameleonHiderCharacter`에 아이드로퍼 모드를 추가하고, 모드 활성 중 페인트 입력을 색상 픽킹으로 전환했다. hover 시 샘플 색상 미리보기, 클릭 시 현재 브러시 색상 갱신, `SurfaceData` 기본 샘플링과 `FinalScreen` 전환 가능 enum 구조를 구현했다.
+- `UChameleonMetaballBodyComponent`에 hit face와 UV barycentric weight를 사용해 현재 베이스 컬러 페인트 텍스처의 픽셀 색상을 샘플링하는 함수를 추가했다.
+- `UChameleonBrushCursorWidget`이 브러시 원형 커서와 고정 크기 아이드로퍼 커서를 전환해서 그리며, 아이드로퍼 모드에서는 hover 샘플 색상 박스를 표시하도록 확장했다.
+- `git diff --check`는 공백 오류 없이 통과했고, `HideSeekEditor Win64 Development` 빌드가 성공했다.
+- `ChameleonPainterBuildTestContent` 커맨드렛이 0 errors 및 기존 procedural mesh degenerate triangle warning 2건으로 완료되어 `T_ChameleonEyedropperIcon.uasset`와 갱신된 `WBP_ChameleonColorPicker`가 생성됐다.
+- `HideSeek/HideSeek.uproject`를 Unreal Editor로 다시 실행했고, 최신 로그에서 Fatal, Error, ensure, 컴파일 실패가 없음을 확인했다.

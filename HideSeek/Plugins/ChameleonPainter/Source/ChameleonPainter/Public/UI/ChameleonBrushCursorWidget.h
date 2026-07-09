@@ -4,6 +4,13 @@
 #include "Blueprint/UserWidget.h"
 #include "ChameleonBrushCursorWidget.generated.h"
 
+UENUM(BlueprintType)
+enum class EChameleonBrushCursorMode : uint8
+{
+	Brush,
+	Eyedropper
+};
+
 UCLASS(BlueprintType, Blueprintable)
 class CHAMELEONPAINTER_API UChameleonBrushCursorWidget : public UUserWidget
 {
@@ -14,6 +21,12 @@ public:
 
 	UFUNCTION(BlueprintCallable, Category = "Chameleon|Paint")
 	void SetPreviewDiameterPixels(float InDiameterPixels);
+
+	UFUNCTION(BlueprintCallable, Category = "Chameleon|Paint")
+	void SetCursorMode(EChameleonBrushCursorMode InCursorMode);
+
+	UFUNCTION(BlueprintCallable, Category = "Chameleon|Paint")
+	void SetSamplePreviewColor(FLinearColor InPreviewColor, bool bInHasPreviewColor);
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Chameleon|Paint")
 	FLinearColor OuterStrokeColor = FLinearColor(0.0f, 0.0f, 0.0f, 0.95f);
@@ -40,4 +53,13 @@ protected:
 private:
 	UPROPERTY(Transient)
 	float PreviewDiameterPixels = 64.0f;
+
+	UPROPERTY(Transient)
+	EChameleonBrushCursorMode CursorMode = EChameleonBrushCursorMode::Brush;
+
+	UPROPERTY(Transient)
+	FLinearColor SamplePreviewColor = FLinearColor::Transparent;
+
+	UPROPERTY(Transient)
+	bool bHasSamplePreviewColor = false;
 };

@@ -271,6 +271,69 @@ UTexture2D* ImportBrushCursorTexture()
 	return Texture;
 }
 
+UTexture2D* ImportEyedropperIconTexture()
+{
+	const FString SourceFile = FPaths::Combine(
+		FPaths::ProjectDir(),
+		TEXT("SourceAssets/UI/ChameleonPainter/T_ChameleonEyedropperIcon.png"));
+	const FString PackageName = UIPath / TEXT("T_ChameleonEyedropperIcon");
+
+	UTexture2D* Texture = LoadAssetByPackageName<UTexture2D>(PackageName);
+	if (FPaths::FileExists(SourceFile))
+	{
+		UPackage* Package = CreatePackage(*PackageName);
+		Package->FullyLoad();
+		const bool bHadExistingTexture = Texture != nullptr;
+
+		UTextureFactory* TextureFactory = NewObject<UTextureFactory>();
+		TextureFactory->AddToRoot();
+		TextureFactory->NoAlpha = false;
+		TextureFactory->CompressionSettings = TC_EditorIcon;
+		TextureFactory->LODGroup = TEXTUREGROUP_UI;
+		TextureFactory->MipGenSettings = TMGS_NoMipmaps;
+		TextureFactory->bCreateMaterial = false;
+		TextureFactory->ColorSpaceMode = ETextureSourceColorSpace::SRGB;
+		UTextureFactory::SuppressImportOverwriteDialog(true);
+
+		UTexture2D* ImportedTexture = Cast<UTexture2D>(UFactory::StaticImportObject(
+			UTexture2D::StaticClass(),
+			Package,
+			TEXT("T_ChameleonEyedropperIcon"),
+			RF_Public | RF_Standalone | RF_Transactional,
+			*SourceFile,
+			nullptr,
+			TextureFactory,
+			nullptr,
+			GWarn));
+
+		TextureFactory->RemoveFromRoot();
+		if (ImportedTexture)
+		{
+			Texture = ImportedTexture;
+			if (!bHadExistingTexture)
+			{
+				FAssetRegistryModule::AssetCreated(Texture);
+			}
+		}
+	}
+	else if (!Texture)
+	{
+		UE_LOG(LogChameleonPainterContent, Warning, TEXT("Eyedropper icon source file is missing: %s"), *SourceFile);
+	}
+
+	if (Texture)
+	{
+		Texture->SRGB = true;
+		Texture->LODGroup = TEXTUREGROUP_UI;
+		Texture->CompressionSettings = TC_EditorIcon;
+		Texture->MipGenSettings = TMGS_NoMipmaps;
+		Texture->MarkPackageDirty();
+		SavePackageForObject(Texture);
+	}
+
+	return Texture;
+}
+
 UMaterial* CreateHiderPaintMaterial()
 {
 	UMaterial* Material = FindOrCreateAsset<UMaterial>(MaterialPath / TEXT("M_CPT_HiderPaint"));
@@ -817,7 +880,7 @@ void ApplyColorPickerSwatchColors(UWidgetBlueprint* WidgetBlueprint, UWidgetTree
 	EnsureWidgetTreeVariableGuids(WidgetBlueprint, WidgetTree);
 }
 
-void RebuildColorPickerWidgetTree(UWidgetBlueprint* WidgetBlueprint)
+void RebuildColorPickerWidgetTree(UWidgetBlueprint* WidgetBlueprint, UTexture2D* EyedropperIconTexture)
 {
 	if (!WidgetBlueprint)
 	{
@@ -856,9 +919,38 @@ void RebuildColorPickerWidgetTree(UWidgetBlueprint* WidgetBlueprint)
 	EnsureWidgetVariableGuid(WidgetBlueprint, RootBox);
 	PanelBorder->SetContent(RootBox);
 
+	UHorizontalBox* HeaderRow = WidgetTree->ConstructWidget<UHorizontalBox>(UHorizontalBox::StaticClass(), TEXT("HeaderRow"));
+	EnsureWidgetVariableGuid(WidgetBlueprint, HeaderRow);
 	UTextBlock* TitleText = CreateColorPickerText(WidgetTree, TEXT("TitleText"), FText::FromString(TEXT("Paint")), 31.0f);
 	EnsureWidgetVariableGuid(WidgetBlueprint, TitleText);
-	if (UVerticalBoxSlot* TitleSlot = RootBox->AddChildToVerticalBox(TitleText))
+	if (UHorizontalBoxSlot* TitleSlot = HeaderRow->AddChildToHorizontalBox(TitleText))
+	{
+		TitleSlot->SetSize(FSlateChildSize(ESlateSizeRule::Fill));
+	}
+	UButton* EyedropperButton = WidgetTree->ConstructWidget<UButton>(UButton::StaticClass(), TEXT("EyedropperButton"));
+	EnsureWidgetVariableGuid(WidgetBlueprint, EyedropperButton);
+	EyedropperButton->SetBackgroundColor(FLinearColor(0.075f, 0.09f, 0.11f, 1.0f));
+	EyedropperButton->SetToolTipText(FText::FromString(TEXT("Sample color")));
+	UImage* EyedropperIcon = WidgetTree->ConstructWidget<UImage>(UImage::StaticClass(), TEXT("EyedropperIcon"));
+	EnsureWidgetVariableGuid(WidgetBlueprint, EyedropperIcon);
+	if (EyedropperIconTexture)
+	{
+		EyedropperIcon->SetBrushFromTexture(EyedropperIconTexture, true);
+	}
+	EyedropperIcon->SetColorAndOpacity(FLinearColor::White);
+	USizeBox* EyedropperIconSize = WidgetTree->ConstructWidget<USizeBox>(USizeBox::StaticClass(), TEXT("EyedropperIconSize"));
+	EnsureWidgetVariableGuid(WidgetBlueprint, EyedropperIconSize);
+	EyedropperIconSize->SetWidthOverride(34.0f);
+	EyedropperIconSize->SetHeightOverride(34.0f);
+	EyedropperIconSize->SetContent(EyedropperIcon);
+	EyedropperButton->SetContent(EyedropperIconSize);
+	USizeBox* EyedropperButtonSize = WidgetTree->ConstructWidget<USizeBox>(USizeBox::StaticClass(), TEXT("EyedropperButtonSize"));
+	EnsureWidgetVariableGuid(WidgetBlueprint, EyedropperButtonSize);
+	EyedropperButtonSize->SetWidthOverride(50.0f);
+	EyedropperButtonSize->SetHeightOverride(42.0f);
+	EyedropperButtonSize->SetContent(EyedropperButton);
+	HeaderRow->AddChildToHorizontalBox(EyedropperButtonSize);
+	if (UVerticalBoxSlot* TitleSlot = RootBox->AddChildToVerticalBox(HeaderRow))
 	{
 		TitleSlot->SetPadding(FMargin(0.0f, 0.0f, 0.0f, 10.0f));
 	}
@@ -1182,7 +1274,7 @@ void RebuildBrushCursorWidgetTree(UWidgetBlueprint* WidgetBlueprint, UTexture2D*
 	WidgetBlueprint->MarkPackageDirty();
 }
 
-UWidgetBlueprint* FindOrCreateColorPickerWidgetBlueprint()
+UWidgetBlueprint* FindOrCreateColorPickerWidgetBlueprint(UTexture2D* EyedropperIconTexture)
 {
 	const FString PackageName = UIPath / TEXT("WBP_ChameleonColorPicker");
 	if (UWidgetBlueprint* ExistingWidgetBlueprint = LoadAssetByPackageName<UWidgetBlueprint>(PackageName))
@@ -1192,7 +1284,7 @@ UWidgetBlueprint* FindOrCreateColorPickerWidgetBlueprint()
 			ExistingWidgetBlueprint->ParentClass = UChameleonColorPickerWidget::StaticClass();
 			FBlueprintEditorUtils::MarkBlueprintAsStructurallyModified(ExistingWidgetBlueprint);
 		}
-		RebuildColorPickerWidgetTree(ExistingWidgetBlueprint);
+		RebuildColorPickerWidgetTree(ExistingWidgetBlueprint, EyedropperIconTexture);
 		FKismetEditorUtilities::CompileBlueprint(ExistingWidgetBlueprint);
 		SavePackageForObject(ExistingWidgetBlueprint);
 		return ExistingWidgetBlueprint;
@@ -1211,7 +1303,7 @@ UWidgetBlueprint* FindOrCreateColorPickerWidgetBlueprint()
 	if (WidgetBlueprint)
 	{
 		FAssetRegistryModule::AssetCreated(WidgetBlueprint);
-		RebuildColorPickerWidgetTree(WidgetBlueprint);
+		RebuildColorPickerWidgetTree(WidgetBlueprint, EyedropperIconTexture);
 		FKismetEditorUtilities::CompileBlueprint(WidgetBlueprint);
 		WidgetBlueprint->MarkPackageDirty();
 		SavePackageForObject(WidgetBlueprint);
@@ -1258,9 +1350,9 @@ UWidgetBlueprint* FindOrCreateBrushCursorWidgetBlueprint(UTexture2D* BrushCursor
 	return WidgetBlueprint;
 }
 
-void ConfigureBlueprints(UChameleonPainterInputConfig* InputConfig, UMaterialInterface* HiderMaterial, UMaterialInterface* PaintSprayMaterial, UTexture2D* BrushCursorTexture, UMaterialInterface* BrushCursorMaterial, UClass*& OutGameModeClass)
+void ConfigureBlueprints(UChameleonPainterInputConfig* InputConfig, UMaterialInterface* HiderMaterial, UMaterialInterface* PaintSprayMaterial, UTexture2D* BrushCursorTexture, UMaterialInterface* BrushCursorMaterial, UTexture2D* EyedropperIconTexture, UClass*& OutGameModeClass)
 {
-	UWidgetBlueprint* ColorPickerWidgetBlueprint = FindOrCreateColorPickerWidgetBlueprint();
+	UWidgetBlueprint* ColorPickerWidgetBlueprint = FindOrCreateColorPickerWidgetBlueprint(EyedropperIconTexture);
 	UWidgetBlueprint* BrushCursorWidgetBlueprint = FindOrCreateBrushCursorWidgetBlueprint(BrushCursorTexture, BrushCursorMaterial);
 
 	UBlueprint* CharacterBlueprint = FindOrCreateBlueprint(BlueprintPath / TEXT("BP_ChameleonHiderCharacter"), AChameleonHiderCharacter::StaticClass());
@@ -1525,9 +1617,10 @@ int32 UChameleonPainterBuildTestContentCommandlet::Main(const FString& Params)
 
 	UChameleonPainterInputConfig* InputConfig = CreateInputAssets();
 	UTexture2D* BrushCursorTexture = ImportBrushCursorTexture();
+	UTexture2D* EyedropperIconTexture = ImportEyedropperIconTexture();
 	UMaterial* BrushCursorMaterial = CreateBrushCursorMaterial(BrushCursorTexture);
 	UClass* GameModeClass = nullptr;
-	ConfigureBlueprints(InputConfig, HiderMaterial, PaintSprayMaterial, BrushCursorTexture, BrushCursorMaterial, GameModeClass);
+	ConfigureBlueprints(InputConfig, HiderMaterial, PaintSprayMaterial, BrushCursorTexture, BrushCursorMaterial, EyedropperIconTexture, GameModeClass);
 
 	const bool bCreatedLevel = CreateTestLevel(ConcreteMaterial, WoodMaterial, GreenMaterial, FloorMaterial, GameModeClass);
 	UEditorLoadingAndSavingUtils::SaveDirtyPackages(false, true);

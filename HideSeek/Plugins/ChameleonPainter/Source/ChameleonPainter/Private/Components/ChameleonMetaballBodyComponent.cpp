@@ -1139,6 +1139,60 @@ bool UChameleonMetaballBodyComponent::ApplyPaintStrokeFromHit(const FHitResult& 
 	return bAppliedLegacyStroke || bAppliedTextureStroke;
 }
 
+bool UChameleonMetaballBodyComponent::TrySampleBaseColorFromHit(const FHitResult& Hit, FLinearColor& OutColor) const
+{
+	if (Hit.Component.Get() != this)
+	{
+		return false;
+	}
+
+	if (Hit.FaceIndex < 0 || CachedTriangles.IsEmpty() || CachedUV0.IsEmpty() || PaintTextureSize <= 0)
+	{
+		OutColor = CamouflageBaseColor;
+		OutColor.A = 1.0f;
+		return true;
+	}
+
+	const int32 TriangleStart = Hit.FaceIndex * 3;
+	if (!CachedTriangles.IsValidIndex(TriangleStart + 2))
+	{
+		return false;
+	}
+
+	const int32 IndexA = CachedTriangles[TriangleStart];
+	const int32 IndexB = CachedTriangles[TriangleStart + 1];
+	const int32 IndexC = CachedTriangles[TriangleStart + 2];
+	const TArray<FVector>& VerticesToUse = AnimatedVertices.Num() == CachedVertices.Num() ? AnimatedVertices : CachedVertices;
+	if (!VerticesToUse.IsValidIndex(IndexA) || !VerticesToUse.IsValidIndex(IndexB) || !VerticesToUse.IsValidIndex(IndexC)
+		|| !CachedUV0.IsValidIndex(IndexA) || !CachedUV0.IsValidIndex(IndexB) || !CachedUV0.IsValidIndex(IndexC))
+	{
+		return false;
+	}
+
+	const FVector AnimatedLocalPosition = GetComponentTransform().InverseTransformPosition(Hit.ImpactPoint);
+	const FVector Weights = ComputeBarycentricWeights(
+		AnimatedLocalPosition,
+		VerticesToUse[IndexA],
+		VerticesToUse[IndexB],
+		VerticesToUse[IndexC]);
+	const FVector2D SampleUv = CachedUV0[IndexA] * Weights.X
+		+ CachedUV0[IndexB] * Weights.Y
+		+ CachedUV0[IndexC] * Weights.Z;
+	const int32 PixelX = FMath::Clamp(FMath::RoundToInt(FMath::Clamp(SampleUv.X, 0.0f, 1.0f) * static_cast<float>(PaintTextureSize - 1)), 0, PaintTextureSize - 1);
+	const int32 PixelY = FMath::Clamp(FMath::RoundToInt(FMath::Clamp(SampleUv.Y, 0.0f, 1.0f) * static_cast<float>(PaintTextureSize - 1)), 0, PaintTextureSize - 1);
+	const int32 PixelIndex = PixelY * PaintTextureSize + PixelX;
+	if (!BaseColorPaintPixels.IsValidIndex(PixelIndex))
+	{
+		OutColor = CamouflageBaseColor;
+		OutColor.A = 1.0f;
+		return true;
+	}
+
+	OutColor = FLinearColor::FromSRGBColor(BaseColorPaintPixels[PixelIndex]);
+	OutColor.A = 1.0f;
+	return true;
+}
+
 void UChameleonMetaballBodyComponent::ApplyMaterialPaintParameters()
 {
 	UMaterialInstanceDynamic* DynamicMaterial = Cast<UMaterialInstanceDynamic>(GetMaterial(0));

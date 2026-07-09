@@ -10,6 +10,8 @@
 #include "EnhancedInputComponent.h"
 #include "EnhancedInputSubsystems.h"
 #include "Game/ChameleonPainterGameInstance.h"
+#include "Engine/GameViewportClient.h"
+#include "Engine/LocalPlayer.h"
 #include "GameFramework/CharacterMovementComponent.h"
 #include "GameFramework/PlayerController.h"
 #include "GameFramework/SpringArmComponent.h"
@@ -20,6 +22,7 @@
 #include "Materials/MaterialParameters.h"
 #include "UI/ChameleonBrushCursorWidget.h"
 #include "UI/ChameleonColorPickerWidget.h"
+#include "UnrealClient.h"
 
 AChameleonHiderCharacter::AChameleonHiderCharacter(const FObjectInitializer& ObjectInitializer)
 	: Super(ObjectInitializer)
@@ -80,6 +83,10 @@ void AChameleonHiderCharacter::Tick(float DeltaSeconds)
 
 	if (bColorPickerVisible)
 	{
+		if (bEyedropperModeActive)
+		{
+			UpdateEyedropperPreviewColor();
+		}
 		UpdateBrushCursorPosition();
 	}
 }
@@ -138,6 +145,12 @@ void AChameleonHiderCharacter::Look(const FInputActionValue& Value)
 
 void AChameleonHiderCharacter::StartPaint()
 {
+	if (bColorPickerVisible && bEyedropperModeActive)
+	{
+		PickEyedropperColor();
+		return;
+	}
+
 	bPaintHeld = true;
 	PaintTriggered();
 }
@@ -149,7 +162,7 @@ void AChameleonHiderCharacter::StopPaint()
 
 void AChameleonHiderCharacter::PaintTriggered()
 {
-	if (!bPaintHeld || !BodyComponent)
+	if ((bColorPickerVisible && bEyedropperModeActive) || !bPaintHeld || !BodyComponent)
 	{
 		return;
 	}
@@ -167,9 +180,8 @@ void AChameleonHiderCharacter::PaintTriggered()
 
 void AChameleonHiderCharacter::SampleColor()
 {
-	FHitResult Hit;
 	FLinearColor SampledColor;
-	if (TraceFromView(SampleTraceDistance, Hit, false) && TrySampleColorFromHit(Hit, SampledColor))
+	if (TrySampleEyedropperColor(SampledColor))
 	{
 		CurrentBrushColor = SampledColor;
 		if (ColorPickerWidget)
@@ -205,6 +217,11 @@ void AChameleonHiderCharacter::HandlePickerMaterialPropertiesChanged(float Rough
 {
 	CurrentBrushRoughness = FMath::Clamp(Roughness, 0.0f, 1.0f);
 	CurrentBrushMetallic = FMath::Clamp(Metallic, 0.0f, 1.0f);
+}
+
+void AChameleonHiderCharacter::HandlePickerEyedropperModeChanged(bool bActive)
+{
+	SetEyedropperModeActive(bActive);
 }
 
 void AChameleonHiderCharacter::AddMappingContext()
@@ -323,6 +340,15 @@ bool AChameleonHiderCharacter::TrySampleColorFromHit(const FHitResult& Hit, FLin
 		return false;
 	}
 
+	if (const UChameleonMetaballBodyComponent* MetaballBody = Cast<UChameleonMetaballBodyComponent>(HitComponent))
+	{
+		if (MetaballBody->TrySampleBaseColorFromHit(Hit, OutColor))
+		{
+			OutColor.A = 1.0f;
+			return true;
+		}
+	}
+
 	int32 MaterialIndex = 0;
 	UMaterialInterface* Material = HitComponent->GetMaterialFromCollisionFaceIndex(Hit.FaceIndex, MaterialIndex);
 	if (!Material)
@@ -347,6 +373,109 @@ bool AChameleonHiderCharacter::TrySampleColorFromHit(const FHitResult& Hit, FLin
 	}
 
 	return false;
+}
+
+bool AChameleonHiderCharacter::TrySampleSurfaceDataColor(FLinearColor& OutColor) const
+{
+	FHitResult Hit;
+	return TraceFromView(SampleTraceDistance, Hit, false) && TrySampleColorFromHit(Hit, OutColor);
+}
+
+bool AChameleonHiderCharacter::TrySampleFinalScreenColor(FLinearColor& OutColor) const
+{
+	const APlayerController* PlayerController = Cast<APlayerController>(GetController());
+	if (!PlayerController)
+	{
+		return false;
+	}
+
+	float MouseX = 0.0f;
+	float MouseY = 0.0f;
+	if (!PlayerController->GetMousePosition(MouseX, MouseY))
+	{
+		return false;
+	}
+
+	ULocalPlayer* LocalPlayer = PlayerController->GetLocalPlayer();
+	UGameViewportClient* ViewportClient = LocalPlayer ? LocalPlayer->ViewportClient : nullptr;
+	FViewport* Viewport = ViewportClient ? ViewportClient->Viewport : nullptr;
+	if (!Viewport)
+	{
+		return false;
+	}
+
+	const FIntPoint ViewportSize = Viewport->GetSizeXY();
+	if (ViewportSize.X <= 0 || ViewportSize.Y <= 0)
+	{
+		return false;
+	}
+
+	const int32 PixelX = FMath::Clamp(FMath::RoundToInt(MouseX), 0, ViewportSize.X - 1);
+	const int32 PixelY = FMath::Clamp(FMath::RoundToInt(MouseY), 0, ViewportSize.Y - 1);
+	TArray<FColor> SampledPixels;
+	FReadSurfaceDataFlags ReadFlags(RCM_UNorm);
+	ReadFlags.SetLinearToGamma(false);
+	if (!Viewport->ReadPixels(SampledPixels, ReadFlags, FIntRect(PixelX, PixelY, PixelX + 1, PixelY + 1)) || SampledPixels.IsEmpty())
+	{
+		return false;
+	}
+
+	OutColor = FLinearColor::FromSRGBColor(SampledPixels[0]);
+	OutColor.A = 1.0f;
+	return true;
+}
+
+bool AChameleonHiderCharacter::TrySampleEyedropperColor(FLinearColor& OutColor) const
+{
+	switch (ColorPickSource)
+	{
+	case EChameleonColorPickSource::FinalScreen:
+		if (TrySampleFinalScreenColor(OutColor))
+		{
+			return true;
+		}
+		return TrySampleSurfaceDataColor(OutColor);
+	case EChameleonColorPickSource::SurfaceData:
+	default:
+		return TrySampleSurfaceDataColor(OutColor);
+	}
+}
+
+void AChameleonHiderCharacter::UpdateEyedropperPreviewColor()
+{
+	FLinearColor SampledColor;
+	bHasEyedropperPreviewColor = TrySampleEyedropperColor(SampledColor);
+	if (bHasEyedropperPreviewColor)
+	{
+		EyedropperPreviewColor = SampledColor;
+	}
+
+	if (BrushCursorWidget)
+	{
+		BrushCursorWidget->SetSamplePreviewColor(EyedropperPreviewColor, bHasEyedropperPreviewColor);
+	}
+}
+
+void AChameleonHiderCharacter::PickEyedropperColor()
+{
+	FLinearColor SampledColor;
+	if (!TrySampleEyedropperColor(SampledColor))
+	{
+		return;
+	}
+
+	SampledColor.A = 1.0f;
+	CurrentBrushColor = SampledColor;
+	EyedropperPreviewColor = SampledColor;
+	bHasEyedropperPreviewColor = true;
+	if (ColorPickerWidget)
+	{
+		ColorPickerWidget->SetSelectedColor(CurrentBrushColor, true);
+	}
+	if (BrushCursorWidget)
+	{
+		BrushCursorWidget->SetSamplePreviewColor(CurrentBrushColor, true);
+	}
 }
 
 void AChameleonHiderCharacter::SpawnPaintSprayEffect(const FHitResult& Hit)
@@ -417,6 +546,7 @@ void AChameleonHiderCharacter::EnsureColorPicker()
 		ColorPickerWidget->SetSelectedMaterialProperties(CurrentBrushRoughness, CurrentBrushMetallic, false);
 		ColorPickerWidget->OnColorChanged.AddDynamic(this, &AChameleonHiderCharacter::HandlePickerColorChanged);
 		ColorPickerWidget->OnMaterialPropertiesChanged.AddDynamic(this, &AChameleonHiderCharacter::HandlePickerMaterialPropertiesChanged);
+		ColorPickerWidget->OnEyedropperModeChanged.AddDynamic(this, &AChameleonHiderCharacter::HandlePickerEyedropperModeChanged);
 		ColorPickerWidget->AddToViewport(100);
 		ColorPickerWidget->SetAlignmentInViewport(FVector2D::ZeroVector);
 		ColorPickerWidget->SetPositionInViewport(FVector2D(24.0f, 24.0f), false);
@@ -453,6 +583,8 @@ void AChameleonHiderCharacter::EnsureBrushCursor()
 			MinBrushCursorDiameterPixels,
 			MaxBrushCursorDiameterPixels);
 		BrushCursorWidget->SetPreviewDiameterPixels(CursorDiameter);
+		BrushCursorWidget->SetCursorMode(EChameleonBrushCursorMode::Brush);
+		BrushCursorWidget->SetSamplePreviewColor(CurrentBrushColor, false);
 		BrushCursorWidget->SetDesiredSizeInViewport(FVector2D(CursorDiameter, CursorDiameter));
 		BrushCursorWidget->SetVisibility(ESlateVisibility::Collapsed);
 	}
@@ -475,10 +607,16 @@ void AChameleonHiderCharacter::UpdateBrushCursorPosition()
 	float MouseY = 0.0f;
 	if (PlayerController->GetMousePosition(MouseX, MouseY))
 	{
-		const float CursorDiameter = CalculateBrushCursorDiameterPixels(*PlayerController);
+		const float CursorDiameter = bEyedropperModeActive
+			? FMath::Max(EyedropperCursorSizePixels, 24.0f)
+			: CalculateBrushCursorDiameterPixels(*PlayerController);
+		BrushCursorWidget->SetCursorMode(bEyedropperModeActive ? EChameleonBrushCursorMode::Eyedropper : EChameleonBrushCursorMode::Brush);
 		BrushCursorWidget->SetPreviewDiameterPixels(CursorDiameter);
 		BrushCursorWidget->SetDesiredSizeInViewport(FVector2D(CursorDiameter, CursorDiameter));
-		BrushCursorWidget->SetPositionInViewport(FVector2D(MouseX - CursorDiameter * 0.5f, MouseY - CursorDiameter * 0.5f), true);
+		const FVector2D CursorPosition = bEyedropperModeActive
+			? FVector2D(MouseX - CursorDiameter * 0.18f, MouseY - CursorDiameter * 0.78f)
+			: FVector2D(MouseX - CursorDiameter * 0.5f, MouseY - CursorDiameter * 0.5f);
+		BrushCursorWidget->SetPositionInViewport(CursorPosition, true);
 	}
 }
 
@@ -556,6 +694,10 @@ float AChameleonHiderCharacter::CalculateBrushCursorDiameterPixels(const APlayer
 void AChameleonHiderCharacter::SetColorPickerVisible(bool bVisible)
 {
 	bColorPickerVisible = bVisible;
+	if (!bVisible)
+	{
+		SetEyedropperModeActive(false);
+	}
 
 	if (ColorPickerWidget)
 	{
@@ -572,6 +714,7 @@ void AChameleonHiderCharacter::SetColorPickerVisible(bool bVisible)
 			if (BrushCursorWidget)
 			{
 				BrushCursorWidget->SetVisibility(ESlateVisibility::HitTestInvisible);
+				BrushCursorWidget->SetCursorMode(bEyedropperModeActive ? EChameleonBrushCursorMode::Eyedropper : EChameleonBrushCursorMode::Brush);
 				UpdateBrushCursorPosition();
 			}
 			SetActorTickEnabled(true);
@@ -592,4 +735,34 @@ void AChameleonHiderCharacter::SetColorPickerVisible(bool bVisible)
 			PlayerController->SetInputMode(InputMode);
 		}
 	}
+}
+
+void AChameleonHiderCharacter::SetEyedropperModeActive(bool bActive)
+{
+	if (bEyedropperModeActive == bActive)
+	{
+		if (ColorPickerWidget)
+		{
+			ColorPickerWidget->SetEyedropperModeActive(bEyedropperModeActive, false);
+		}
+		return;
+	}
+
+	bEyedropperModeActive = bActive;
+	bPaintHeld = false;
+	if (!bEyedropperModeActive)
+	{
+		bHasEyedropperPreviewColor = false;
+	}
+
+	if (ColorPickerWidget)
+	{
+		ColorPickerWidget->SetEyedropperModeActive(bEyedropperModeActive, false);
+	}
+	if (BrushCursorWidget)
+	{
+		BrushCursorWidget->SetCursorMode(bEyedropperModeActive ? EChameleonBrushCursorMode::Eyedropper : EChameleonBrushCursorMode::Brush);
+		BrushCursorWidget->SetSamplePreviewColor(EyedropperPreviewColor, bEyedropperModeActive && bHasEyedropperPreviewColor);
+	}
+	UpdateBrushCursorPosition();
 }
