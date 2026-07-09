@@ -60,3 +60,8 @@
 
 - 질문: 복제 선행작업 하려면 어느정도 로컬 구현이 나온뒤 진행해?
 - 답변: 기능을 모두 polish한 뒤가 아니라, 서버가 권위를 가져야 할 게임 상태가 안정적으로 정의된 뒤 진행하는 것이 좋다. 현재는 채색/위장 캐릭터는 있으나 헌터 판정과 라운드 흐름이 아직 없으므로, 최소 hider/hunter 역할, 라운드 phase, 승패 조건, 페인트 stroke 데이터 모델이 로컬에서 한 번 닫힌 뒤 바로 복제를 붙이는 순서가 적절하다.
+
+## 2026-07-09 13:22:06 (소요시간: 00:00:42)
+
+- 질문: 레벨에 추가한 Sky Atmosphere 같은 액터가 자꾸 사라지는 이유가 레벨을 처음부터 새로 만들고 있어서인가?
+- 답변: 맞다. `ChameleonPainterBuildTestContent` 커맨드렛의 `CreateTestLevel()`이 기존 `L_ChameleonPainter_Test` 맵을 로드해 갱신하는 방식이 아니라 `UEditorLoadingAndSavingUtils::NewBlankMap(false)`로 새 빈 맵을 만든 뒤 같은 경로에 `SaveMap()`으로 덮어쓴다. 따라서 수동으로 추가한 레벨 액터는 커맨드렛 실행 때 사라진다.

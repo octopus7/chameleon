@@ -14,6 +14,7 @@
 #include "Components/Image.h"
 #include "Components/SizeBox.h"
 #include "Components/Slider.h"
+#include "Components/SkyAtmosphereComponent.h"
 #include "Components/SkyLightComponent.h"
 #include "Components/StaticMeshComponent.h"
 #include "Components/TextBlock.h"
@@ -51,8 +52,8 @@
 #include "Materials/MaterialExpressionMax.h"
 #include "Materials/MaterialExpressionMultiply.h"
 #include "Materials/MaterialExpressionTextureSample.h"
+#include "Materials/MaterialExpressionTextureSampleParameter2D.h"
 #include "Materials/MaterialExpressionVectorParameter.h"
-#include "Materials/MaterialExpressionVertexColor.h"
 #include "MaterialEditingLibrary.h"
 #include "Misc/ConfigCacheIni.h"
 #include "Misc/PackageName.h"
@@ -262,17 +263,23 @@ UMaterial* CreateHiderPaintMaterial()
 	Material->PreEditChange(nullptr);
 	UMaterialEditingLibrary::DeleteAllMaterialExpressions(Material);
 
-	UMaterialExpressionVertexColor* VertexColor = Cast<UMaterialExpressionVertexColor>(
-		UMaterialEditingLibrary::CreateMaterialExpression(Material, UMaterialExpressionVertexColor::StaticClass(), -360, -80));
+	UMaterialExpressionTextureSampleParameter2D* BaseColorTexture = Cast<UMaterialExpressionTextureSampleParameter2D>(
+		UMaterialEditingLibrary::CreateMaterialExpression(Material, UMaterialExpressionTextureSampleParameter2D::StaticClass(), -520, -100));
 	UMaterialExpressionConstant* Roughness = Cast<UMaterialExpressionConstant>(
 		UMaterialEditingLibrary::CreateMaterialExpression(Material, UMaterialExpressionConstant::StaticClass(), -360, 120));
 
+	if (BaseColorTexture)
+	{
+		BaseColorTexture->ParameterName = TEXT("BaseColorPaintTexture");
+		BaseColorTexture->Texture = LoadObject<UTexture2D>(nullptr, TEXT("/Engine/EngineResources/WhiteSquareTexture.WhiteSquareTexture"));
+		BaseColorTexture->AutoSetSampleType();
+	}
 	if (Roughness)
 	{
 		Roughness->R = 0.84f;
 	}
 
-	UMaterialEditingLibrary::ConnectMaterialProperty(VertexColor, TEXT(""), MP_BaseColor);
+	UMaterialEditingLibrary::ConnectMaterialProperty(BaseColorTexture, TEXT(""), MP_BaseColor);
 	UMaterialEditingLibrary::ConnectMaterialProperty(Roughness, TEXT(""), MP_Roughness);
 	UMaterialEditingLibrary::RecompileMaterial(Material);
 	Material->PostEditChange();
@@ -454,8 +461,7 @@ UChameleonPainterInputConfig* CreateInputAssets()
 	MapKey(MappingContext, JumpAction, EKeys::SpaceBar);
 	MapKey(MappingContext, PaintAction, EKeys::LeftMouseButton);
 	MapKey(MappingContext, SampleColorAction, EKeys::E);
-	MapKey(MappingContext, ToggleColorPickerAction, EKeys::RightMouseButton);
-	MapKey(MappingContext, ToggleColorPickerAction, EKeys::Tab);
+	MapKey(MappingContext, ToggleColorPickerAction, EKeys::F);
 
 	MappingContext->MarkPackageDirty();
 	SavePackageForObject(MappingContext);
@@ -1055,6 +1061,8 @@ bool CreateTestLevel(
 	{
 		Sun->SetActorLabel(TEXT("CPT_DirectionalLight"));
 		Sun->GetLightComponent()->SetIntensity(4.0f);
+		Sun->GetComponent()->SetAtmosphereSunLight(true);
+		Sun->GetComponent()->SetAtmosphereSunLightIndex(0);
 	}
 
 	ASkyLight* SkyLight = World->SpawnActor<ASkyLight>(FVector::ZeroVector, FRotator::ZeroRotator);
@@ -1062,6 +1070,12 @@ bool CreateTestLevel(
 	{
 		SkyLight->SetActorLabel(TEXT("CPT_SkyLight"));
 		SkyLight->GetLightComponent()->SetIntensity(0.75f);
+	}
+
+	ASkyAtmosphere* SkyAtmosphere = World->SpawnActor<ASkyAtmosphere>(FVector::ZeroVector, FRotator::ZeroRotator);
+	if (SkyAtmosphere && SkyAtmosphere->GetComponent())
+	{
+		SkyAtmosphere->SetActorLabel(TEXT("CPT_SkyAtmosphere"));
 	}
 
 	const FTransform PreviewBodyTransform(FRotator(0.0f, -40.0f, 0.0f), FVector(480.0f, -360.0f, 10.0f));

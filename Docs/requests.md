@@ -193,3 +193,22 @@
 - 첫 커맨드렛 실행에서 신규 swatch 위젯 GUID 누락 ensure가 발생했으나, GUID 보강 로직을 추가한 뒤 재빌드 및 재실행해 최종 성공했다.
 - 검증으로 `HideSeekEditor Win64 Development` 빌드가 성공했고, `ChameleonPainterBuildTestContent` 커맨드렛이 0 errors, 기존 metaball degenerate triangle warning 2건으로 완료됐다.
 - AGENTS 지침에 따라 검증 후 `HideSeek/HideSeek.uproject`를 Unreal Editor로 다시 열었다.
+## 2026-07-09 13:20:20 (소요시간: 00:04:37)
+
+- 기존 페인팅 구현을 다시 확인하고, 정점 컬러 중심 페인팅에서 UV 기반 `BaseColor` 런타임 텍스처 페인팅으로 확장했다.
+- `UChameleonMetaballBodyComponent`에 `BaseColorPaintTexture` 생성/초기화/업데이트 로직과 CPU 픽셀 버퍼를 추가했다.
+- 라인트레이스 히트의 `FaceIndex`로 삼각형을 찾고, 히트 위치의 barycentric weight를 계산해 UV 좌표를 얻은 뒤 해당 UV에 브러시 원형 스탬프를 찍도록 구현했다.
+- 브러시 반경은 삼각형의 월드/UV 엣지 비율로 `cm -> texture pixel`로 환산하고, UV 아틀라스 셀 경계 안에서만 칠해 다른 UV 섬으로 번지는 것을 줄였다.
+- `M_CPT_HiderPaint` 생성 로직을 `VertexColor -> BaseColor`에서 `BaseColorPaintTexture` 텍스처 파라미터 기반 Base Color로 변경했다.
+- 페인트 모드 진입 입력 생성 로직을 `Tab`/우클릭 대신 `F` 키 매핑으로 갱신했다.
+- `Build.bat HideSeekEditor Win64 Development -Project=D:\github\chameleon\HideSeek\HideSeek.uproject -WaitMutex -NoHotReload` 빌드가 성공했다.
+- `UnrealEditor-Cmd.exe ... -run=ChameleonPainterBuildTestContent -unattended -nop4` 커맨드렛으로 테스트 콘텐츠와 입력/머티리얼/UI 에셋을 재생성했고, 결과는 0 errors 및 기존 procedural mesh degenerate triangle warning 2건이었다.
+- AGENTS 지침에 따라 빌드와 커맨드렛 성공 후 `HideSeek/HideSeek.uproject`를 Unreal Editor로 실행했다.
+
+## 2026-07-09 13:24:21 (소요시간: 00:04:00)
+
+- 테스트 레벨 생성 시 수동 추가한 Sky Atmosphere가 사라지는 문제에 대해, 레벨 생성 코드가 기본으로 Sky Atmosphere를 포함하도록 수정했다.
+- `ChameleonPainterBuildTestContent` 커맨드렛의 `CreateTestLevel()`에서 `ASkyAtmosphere`를 스폰하고 `CPT_SkyAtmosphere` 라벨을 지정하도록 추가했다.
+- `CPT_DirectionalLight`의 `UDirectionalLightComponent`에 `SetAtmosphereSunLight(true)`와 `SetAtmosphereSunLightIndex(0)`를 적용해 대기 태양광으로 연결되도록 했다.
+- `HideSeekEditor Win64 Development` 일반 빌드가 성공했다.
+- `ChameleonPainterBuildTestContent` 커맨드렛을 다시 실행해 `L_ChameleonPainter_Test.umap`에 생성 변경을 반영했고, 결과는 0 errors 및 기존 procedural mesh degenerate triangle warning 2건이었다.
