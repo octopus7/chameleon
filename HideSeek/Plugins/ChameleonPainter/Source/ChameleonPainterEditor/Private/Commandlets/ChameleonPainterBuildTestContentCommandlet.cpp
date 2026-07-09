@@ -61,6 +61,7 @@
 #include "MaterialEditingLibrary.h"
 #include "Misc/ConfigCacheIni.h"
 #include "Misc/PackageName.h"
+#include "UI/ChameleonBrushCursorWidget.h"
 #include "UI/ChameleonColorPickerWidget.h"
 #include "UI/ChameleonHSVColorWheelWidget.h"
 #include "UObject/SavePackage.h"
@@ -88,6 +89,12 @@ FString ToObjectPath(const FString& PackageName)
 template <typename T>
 T* LoadAssetByPackageName(const FString& PackageName)
 {
+	const FString PackageFilename = FPackageName::LongPackageNameToFilename(PackageName, FPackageName::GetAssetPackageExtension());
+	if (!FPaths::FileExists(PackageFilename))
+	{
+		return nullptr;
+	}
+
 	return Cast<T>(StaticLoadObject(T::StaticClass(), nullptr, *ToObjectPath(PackageName)));
 }
 
@@ -473,6 +480,8 @@ UChameleonPainterInputConfig* CreateInputAssets()
 	UInputAction* PaintAction = CreateInputActionAsset(TEXT("IA_Paint"), EInputActionValueType::Boolean);
 	UInputAction* SampleColorAction = CreateInputActionAsset(TEXT("IA_SampleColor"), EInputActionValueType::Boolean);
 	UInputAction* ToggleColorPickerAction = CreateInputActionAsset(TEXT("IA_ToggleColorPicker"), EInputActionValueType::Boolean);
+	UInputAction* DecreaseBrushSizeAction = CreateInputActionAsset(TEXT("IA_DecreaseBrushSize"), EInputActionValueType::Boolean);
+	UInputAction* IncreaseBrushSizeAction = CreateInputActionAsset(TEXT("IA_IncreaseBrushSize"), EInputActionValueType::Boolean);
 
 	UInputMappingContext* MappingContext = FindOrCreateAsset<UInputMappingContext>(InputPath / TEXT("IMC_ChameleonPlayer"));
 	MappingContext->UnmapAll();
@@ -495,6 +504,8 @@ UChameleonPainterInputConfig* CreateInputAssets()
 	MapKey(MappingContext, PaintAction, EKeys::LeftMouseButton);
 	MapKey(MappingContext, SampleColorAction, EKeys::E);
 	MapKey(MappingContext, ToggleColorPickerAction, EKeys::F);
+	MapKey(MappingContext, DecreaseBrushSizeAction, EKeys::LeftBracket);
+	MapKey(MappingContext, IncreaseBrushSizeAction, EKeys::RightBracket);
 
 	MappingContext->MarkPackageDirty();
 	SavePackageForObject(MappingContext);
@@ -507,6 +518,8 @@ UChameleonPainterInputConfig* CreateInputAssets()
 	InputConfig->PaintAction = PaintAction;
 	InputConfig->SampleColorAction = SampleColorAction;
 	InputConfig->ToggleColorPickerAction = ToggleColorPickerAction;
+	InputConfig->DecreaseBrushSizeAction = DecreaseBrushSizeAction;
+	InputConfig->IncreaseBrushSizeAction = IncreaseBrushSizeAction;
 	InputConfig->MarkPackageDirty();
 	SavePackageForObject(InputConfig);
 
@@ -1134,61 +1147,36 @@ void RebuildColorPickerWidgetTree(UWidgetBlueprint* WidgetBlueprint)
 
 void RebuildBrushCursorWidgetTree(UWidgetBlueprint* WidgetBlueprint, UTexture2D* BrushCursorTexture, UMaterialInterface* BrushCursorMaterial)
 {
+	(void)BrushCursorTexture;
+	(void)BrushCursorMaterial;
+
 	if (!WidgetBlueprint)
 	{
 		return;
 	}
 
-	if (!WidgetBlueprint->WidgetTree)
+	WidgetBlueprint->Modify();
+	if (WidgetBlueprint->WidgetTree)
 	{
-		WidgetBlueprint->WidgetTree = NewObject<UWidgetTree>(WidgetBlueprint, TEXT("WidgetTree"), RF_Transactional);
+		WidgetBlueprint->WidgetTree->Rename(nullptr, GetTransientPackage(), REN_DontCreateRedirectors | REN_ForceNoResetLoaders);
 	}
 
+	WidgetBlueprint->WidgetVariableNameToGuidMap.Empty();
+	WidgetBlueprint->WidgetTree = NewObject<UWidgetTree>(WidgetBlueprint, TEXT("WidgetTree"), RF_Transactional);
 	UWidgetTree* WidgetTree = WidgetBlueprint->WidgetTree;
 	if (!WidgetTree)
 	{
 		return;
 	}
 
-	UImage* ExistingImage = Cast<UImage>(WidgetTree->FindWidget(FName(TEXT("BrushCursorImage"))));
-	if (ExistingImage && (BrushCursorMaterial || BrushCursorTexture))
-	{
-		if (BrushCursorMaterial)
-		{
-			ExistingImage->SetBrushFromMaterial(BrushCursorMaterial);
-		}
-		else
-		{
-			ExistingImage->SetBrushFromTexture(BrushCursorTexture, true);
-		}
-		WidgetBlueprint->MarkPackageDirty();
-		return;
-	}
-
-	if (WidgetTree->RootWidget)
-	{
-		return;
-	}
-
-	WidgetBlueprint->Modify();
 	WidgetTree->Modify();
 
-	USizeBox* CursorSize = WidgetTree->ConstructWidget<USizeBox>(USizeBox::StaticClass(), TEXT("BrushCursorSize"));
-	CursorSize->SetWidthOverride(64.0f);
-	CursorSize->SetHeightOverride(64.0f);
-	WidgetTree->RootWidget = CursorSize;
-
-	UImage* CursorImage = WidgetTree->ConstructWidget<UImage>(UImage::StaticClass(), TEXT("BrushCursorImage"));
-	if (BrushCursorMaterial)
-	{
-		CursorImage->SetBrushFromMaterial(BrushCursorMaterial);
-	}
-	else if (BrushCursorTexture)
-	{
-		CursorImage->SetBrushFromTexture(BrushCursorTexture, true);
-	}
-	CursorImage->SetDesiredSizeOverride(FVector2D(64.0f, 64.0f));
-	CursorSize->SetContent(CursorImage);
+	UBorder* CursorRoot = WidgetTree->ConstructWidget<UBorder>(UBorder::StaticClass(), TEXT("BrushCursorRoot"));
+	EnsureWidgetVariableGuid(WidgetBlueprint, CursorRoot);
+	CursorRoot->SetBrushColor(FLinearColor::Transparent);
+	CursorRoot->SetPadding(FMargin(0.0f));
+	WidgetTree->RootWidget = CursorRoot;
+	EnsureWidgetTreeVariableGuids(WidgetBlueprint, WidgetTree);
 
 	FBlueprintEditorUtils::MarkBlueprintAsStructurallyModified(WidgetBlueprint);
 	WidgetBlueprint->MarkPackageDirty();
@@ -1237,9 +1225,9 @@ UWidgetBlueprint* FindOrCreateBrushCursorWidgetBlueprint(UTexture2D* BrushCursor
 	const FString PackageName = UIPath / TEXT("WBP_ChameleonBrushCursor");
 	if (UWidgetBlueprint* ExistingWidgetBlueprint = LoadAssetByPackageName<UWidgetBlueprint>(PackageName))
 	{
-		if (ExistingWidgetBlueprint->ParentClass != UUserWidget::StaticClass())
+		if (ExistingWidgetBlueprint->ParentClass != UChameleonBrushCursorWidget::StaticClass())
 		{
-			ExistingWidgetBlueprint->ParentClass = UUserWidget::StaticClass();
+			ExistingWidgetBlueprint->ParentClass = UChameleonBrushCursorWidget::StaticClass();
 			FBlueprintEditorUtils::MarkBlueprintAsStructurallyModified(ExistingWidgetBlueprint);
 		}
 		RebuildBrushCursorWidgetTree(ExistingWidgetBlueprint, BrushCursorTexture, BrushCursorMaterial);
@@ -1252,7 +1240,7 @@ UWidgetBlueprint* FindOrCreateBrushCursorWidgetBlueprint(UTexture2D* BrushCursor
 	Package->FullyLoad();
 	const FName AssetName(*FPackageName::GetLongPackageAssetName(PackageName));
 	UWidgetBlueprint* WidgetBlueprint = Cast<UWidgetBlueprint>(FKismetEditorUtilities::CreateBlueprint(
-		UUserWidget::StaticClass(),
+		UChameleonBrushCursorWidget::StaticClass(),
 		Package,
 		AssetName,
 		BPTYPE_Normal,
@@ -1299,10 +1287,17 @@ void ConfigureBlueprints(UChameleonPainterInputConfig* InputConfig, UMaterialInt
 			: UChameleonColorPickerWidget::StaticClass();
 		CharacterCDO->ColorPickerWidgetClass = TSubclassOf<UChameleonColorPickerWidget>(ColorPickerWidgetClass);
 		CharacterCDO->BrushCursorWidgetClass = BrushCursorWidgetBlueprint && BrushCursorWidgetBlueprint->GeneratedClass
-			? TSubclassOf<UUserWidget>(static_cast<UClass*>(BrushCursorWidgetBlueprint->GeneratedClass.Get()))
-			: TSubclassOf<UUserWidget>();
+			? TSubclassOf<UChameleonBrushCursorWidget>(static_cast<UClass*>(BrushCursorWidgetBlueprint->GeneratedClass.Get()))
+			: TSubclassOf<UChameleonBrushCursorWidget>();
 		CharacterCDO->PaintSprayEffectClass = AChameleonPaintSprayActor::StaticClass();
 		CharacterCDO->PaintSprayMaterial = PaintSprayMaterial;
+		CharacterCDO->BrushRadiusCm = 18.0f;
+		CharacterCDO->MinBrushRadiusCm = 4.0f;
+		CharacterCDO->MaxBrushRadiusCm = 72.0f;
+		CharacterCDO->BrushRadiusStepCm = 3.0f;
+		CharacterCDO->BrushCursorFallbackPixelsPerCm = 2.0f;
+		CharacterCDO->MinBrushCursorDiameterPixels = 24.0f;
+		CharacterCDO->MaxBrushCursorDiameterPixels = 260.0f;
 		CharacterCDO->CurrentBrushColor = GetDefaultBrushColor();
 		CharacterCDO->CurrentBrushRoughness = GetDefaultBrushRoughness();
 		CharacterCDO->CurrentBrushMetallic = GetDefaultBrushMetallic();

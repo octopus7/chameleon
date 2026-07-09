@@ -275,3 +275,18 @@
 - `HideSeekEditor Win64 Development` 빌드가 성공했다.
 - `ChameleonPainterBuildTestContent` 커맨드렛을 재실행해 WBP와 캐릭터 BP를 저장했고, 결과는 0 errors 및 기존 procedural mesh degenerate triangle warning 2건이었다.
 - `HideSeek/HideSeek.uproject`를 Unreal Editor로 다시 실행했으며, 최신 로그에서 WBP 컴파일 ensure, Fatal, 새 UI 관련 오류가 재발하지 않음을 확인했다.
+
+## 2026-07-09 15:08:30 (소요시간: 00:08:48)
+
+- 브러시 사이즈 조절 기능을 추가하고 `[` 키는 감소, `]` 키는 증가로 매핑했다.
+- `UChameleonPainterInputConfig`에 `DecreaseBrushSizeAction`, `IncreaseBrushSizeAction`을 추가하고, 커맨드렛이 `IA_DecreaseBrushSize`, `IA_IncreaseBrushSize` 에셋과 `IMC_ChameleonPlayer` 매핑을 저장하도록 했다.
+- `AChameleonHiderCharacter`에 브러시 반경 최소/최대/스텝 값과 커서 화면 크기 범위를 추가하고, 입력 시 `BrushRadiusCm`을 클램프해 갱신하도록 했다.
+- 브러시 커서 미리보기는 화면 전체 픽셀 레이캐스트가 아니라 마우스 위치 1회 트레이스 후 히트 지점의 월드 브러시 반경을 화면 반경으로 투영하는 방식으로 구현했다.
+- 기존 고정 이미지 커서 대신 `UChameleonBrushCursorWidget`을 추가해 속이 빈 원형 커서를 Slate 선 그리기로 표시하도록 했다.
+- UMG에서 배경색을 직접 샘플링하는 실제 색반전은 피하고, 배경 영향을 덜 받도록 검정/흰색 이중 외곽선으로 커서를 그리게 했다.
+- `WBP_ChameleonBrushCursor`의 부모 클래스를 `UChameleonBrushCursorWidget`으로 재생성하고, 캐릭터 BP가 해당 WBP를 참조하도록 커맨드렛을 갱신했다.
+- UE unity 빌드에서 `ChameleonColorPickerWidget.cpp`와 `ChameleonHSVColorWheelWidget.cpp`의 anonymous namespace 함수명이 충돌하던 문제를 HSV 위젯 함수명 고유화로 해결했다.
+- 새 에셋 최초 생성 시 `StaticLoadObject` 경고가 발생하지 않도록 커맨드렛의 패키지 로더가 디스크 존재 여부를 먼저 확인하게 했다.
+- `HideSeekEditor Win64 Development` 빌드가 성공했다.
+- `ChameleonPainterBuildTestContent` 커맨드렛을 실행해 새 입력 액션, 매핑 컨텍스트, 브러시 커서 WBP, 캐릭터 BP 기본값을 저장했고 결과는 0 errors였다. 남은 경고는 파일 이동 재시도 후 복구와 기존 procedural mesh degenerate triangle warning이었다.
+- `HideSeek/HideSeek.uproject`를 Unreal Editor로 다시 실행했으며, 최신 로그에서 Fatal, ensure, 위젯 컴파일 실패가 없음을 확인했다.

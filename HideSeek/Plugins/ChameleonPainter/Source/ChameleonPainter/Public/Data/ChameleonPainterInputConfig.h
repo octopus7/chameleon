@@ -33,4 +33,10 @@ public:
 
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Chameleon|Input")
 	TObjectPtr<UInputAction> ToggleColorPickerAction;
+
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Chameleon|Input")
+	TObjectPtr<UInputAction> DecreaseBrushSizeAction;
+
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Chameleon|Input")
+	TObjectPtr<UInputAction> IncreaseBrushSizeAction;
 };

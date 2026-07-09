@@ -12,7 +12,7 @@ namespace
 {
 constexpr float TwoPi = UE_TWO_PI;
 
-FLinearColor ClampColor(FLinearColor Color)
+FLinearColor ClampHSVWidgetColor(FLinearColor Color)
 {
 	Color.R = FMath::Clamp(Color.R, 0.0f, 1.0f);
 	Color.G = FMath::Clamp(Color.G, 0.0f, 1.0f);
@@ -23,7 +23,7 @@ FLinearColor ClampColor(FLinearColor Color)
 
 void ColorToHSV01(const FLinearColor& Color, float& OutHue, float& OutSaturation, float& OutValue)
 {
-	const FLinearColor HSV = ClampColor(Color).LinearRGBToHSV();
+	const FLinearColor HSV = ClampHSVWidgetColor(Color).LinearRGBToHSV();
 	OutHue = FMath::Clamp(HSV.R / 360.0f, 0.0f, 1.0f);
 	OutSaturation = FMath::Clamp(HSV.G, 0.0f, 1.0f);
 	OutValue = FMath::Clamp(HSV.B, 0.0f, 1.0f);
@@ -34,7 +34,7 @@ FLinearColor ColorFromHSV01(float Hue, float Saturation, float Value)
 	const FLinearColor HSV(FMath::Clamp(Hue, 0.0f, 1.0f) * 360.0f, FMath::Clamp(Saturation, 0.0f, 1.0f), FMath::Clamp(Value, 0.0f, 1.0f), 1.0f);
 	FLinearColor RGB = HSV.HSVToLinearRGB();
 	RGB.A = 1.0f;
-	return ClampColor(RGB);
+	return ClampHSVWidgetColor(RGB);
 }
 
 void AppendCirclePoints(TArray<FVector2D>& OutPoints, const FVector2D& Center, float Radius, int32 SegmentCount)
@@ -61,13 +61,13 @@ public:
 
 	void Construct(const FArguments& InArgs)
 	{
-		CurrentColor = ClampColor(InArgs._Color);
+		CurrentColor = ClampHSVWidgetColor(InArgs._Color);
 		OnColorChanged = InArgs._OnColorChanged;
 	}
 
 	void SetColor(FLinearColor NewColor)
 	{
-		CurrentColor = ClampColor(NewColor);
+		CurrentColor = ClampHSVWidgetColor(NewColor);
 	}
 
 	virtual FVector2D ComputeDesiredSize(float LayoutScaleMultiplier) const override
@@ -285,7 +285,7 @@ UChameleonHSVColorWheelWidget::UChameleonHSVColorWheelWidget(const FObjectInitia
 
 void UChameleonHSVColorWheelWidget::SetSelectedColor(FLinearColor NewColor)
 {
-	SelectedColor = ClampColor(NewColor);
+	SelectedColor = ClampHSVWidgetColor(NewColor);
 	if (SlateColorWheel)
 	{
 		SlateColorWheel->SetColor(SelectedColor);
@@ -318,6 +318,6 @@ void UChameleonHSVColorWheelWidget::SynchronizeProperties()
 
 void UChameleonHSVColorWheelWidget::HandleSlateColorChanged(FLinearColor NewColor)
 {
-	SelectedColor = ClampColor(NewColor);
+	SelectedColor = ClampHSVWidgetColor(NewColor);
 	OnColorChanged.Broadcast(SelectedColor);
 }

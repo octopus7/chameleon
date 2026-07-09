@@ -18,6 +18,7 @@
 #include "InputMappingContext.h"
 #include "Materials/MaterialInterface.h"
 #include "Materials/MaterialParameters.h"
+#include "UI/ChameleonBrushCursorWidget.h"
 #include "UI/ChameleonColorPickerWidget.h"
 
 AChameleonHiderCharacter::AChameleonHiderCharacter(const FObjectInitializer& ObjectInitializer)
@@ -184,6 +185,16 @@ void AChameleonHiderCharacter::ToggleColorPicker()
 	SetColorPickerVisible(!bColorPickerVisible);
 }
 
+void AChameleonHiderCharacter::DecreaseBrushSize()
+{
+	AdjustBrushSize(-BrushRadiusStepCm);
+}
+
+void AChameleonHiderCharacter::IncreaseBrushSize()
+{
+	AdjustBrushSize(BrushRadiusStepCm);
+}
+
 void AChameleonHiderCharacter::HandlePickerColorChanged(FLinearColor Color)
 {
 	Color.A = 1.0f;
@@ -255,6 +266,14 @@ void AChameleonHiderCharacter::BindEnhancedInput(UInputComponent* PlayerInputCom
 	if (InputConfig->ToggleColorPickerAction)
 	{
 		EnhancedInputComponent->BindAction(InputConfig->ToggleColorPickerAction, ETriggerEvent::Started, this, &AChameleonHiderCharacter::ToggleColorPicker);
+	}
+	if (InputConfig->DecreaseBrushSizeAction)
+	{
+		EnhancedInputComponent->BindAction(InputConfig->DecreaseBrushSizeAction, ETriggerEvent::Started, this, &AChameleonHiderCharacter::DecreaseBrushSize);
+	}
+	if (InputConfig->IncreaseBrushSizeAction)
+	{
+		EnhancedInputComponent->BindAction(InputConfig->IncreaseBrushSizeAction, ETriggerEvent::Started, this, &AChameleonHiderCharacter::IncreaseBrushSize);
 	}
 }
 
@@ -407,7 +426,7 @@ void AChameleonHiderCharacter::EnsureColorPicker()
 
 void AChameleonHiderCharacter::EnsureBrushCursor()
 {
-	if (BrushCursorWidget || !IsLocallyControlled() || !BrushCursorWidgetClass)
+	if (BrushCursorWidget || !IsLocallyControlled())
 	{
 		return;
 	}
@@ -418,12 +437,23 @@ void AChameleonHiderCharacter::EnsureBrushCursor()
 		return;
 	}
 
-	BrushCursorWidget = CreateWidget<UUserWidget>(PlayerController, BrushCursorWidgetClass);
+	TSubclassOf<UChameleonBrushCursorWidget> WidgetClass = BrushCursorWidgetClass;
+	if (!WidgetClass)
+	{
+		WidgetClass = UChameleonBrushCursorWidget::StaticClass();
+	}
+
+	BrushCursorWidget = CreateWidget<UChameleonBrushCursorWidget>(PlayerController, WidgetClass);
 	if (BrushCursorWidget)
 	{
 		BrushCursorWidget->AddToViewport(1000);
 		BrushCursorWidget->SetAlignmentInViewport(FVector2D::ZeroVector);
-		BrushCursorWidget->SetDesiredSizeInViewport(FVector2D(64.0f, 64.0f));
+		const float CursorDiameter = FMath::Clamp(
+			BrushRadiusCm * BrushCursorFallbackPixelsPerCm * 2.0f,
+			MinBrushCursorDiameterPixels,
+			MaxBrushCursorDiameterPixels);
+		BrushCursorWidget->SetPreviewDiameterPixels(CursorDiameter);
+		BrushCursorWidget->SetDesiredSizeInViewport(FVector2D(CursorDiameter, CursorDiameter));
 		BrushCursorWidget->SetVisibility(ESlateVisibility::Collapsed);
 	}
 }
@@ -445,8 +475,82 @@ void AChameleonHiderCharacter::UpdateBrushCursorPosition()
 	float MouseY = 0.0f;
 	if (PlayerController->GetMousePosition(MouseX, MouseY))
 	{
-		BrushCursorWidget->SetPositionInViewport(FVector2D(MouseX - 6.0f, MouseY - 6.0f), true);
+		const float CursorDiameter = CalculateBrushCursorDiameterPixels(*PlayerController);
+		BrushCursorWidget->SetPreviewDiameterPixels(CursorDiameter);
+		BrushCursorWidget->SetDesiredSizeInViewport(FVector2D(CursorDiameter, CursorDiameter));
+		BrushCursorWidget->SetPositionInViewport(FVector2D(MouseX - CursorDiameter * 0.5f, MouseY - CursorDiameter * 0.5f), true);
 	}
+}
+
+void AChameleonHiderCharacter::AdjustBrushSize(float DeltaRadiusCm)
+{
+	const float MinRadius = FMath::Max(MinBrushRadiusCm, 0.1f);
+	const float MaxRadius = FMath::Max(MaxBrushRadiusCm, MinRadius);
+	BrushRadiusCm = FMath::Clamp(BrushRadiusCm + DeltaRadiusCm, MinRadius, MaxRadius);
+	if (bColorPickerVisible)
+	{
+		UpdateBrushCursorPosition();
+	}
+}
+
+float AChameleonHiderCharacter::CalculateBrushCursorDiameterPixels(const APlayerController& PlayerController) const
+{
+	const float MinDiameter = FMath::Max(MinBrushCursorDiameterPixels, 4.0f);
+	const float MaxDiameter = FMath::Max(MaxBrushCursorDiameterPixels, MinDiameter);
+	const float FallbackDiameter = FMath::Clamp(
+		BrushRadiusCm * FMath::Max(BrushCursorFallbackPixelsPerCm, 0.1f) * 2.0f,
+		MinDiameter,
+		MaxDiameter);
+
+	FHitResult Hit;
+	if (!TraceFromView(BrushTraceDistance, Hit, true))
+	{
+		return FallbackDiameter;
+	}
+
+	FVector ViewLocation;
+	FVector ViewDirection;
+	if (!PlayerController.DeprojectMousePositionToWorld(ViewLocation, ViewDirection))
+	{
+		return FallbackDiameter;
+	}
+
+	const FVector SurfaceNormal = Hit.ImpactNormal.GetSafeNormal(UE_SMALL_NUMBER, FVector::UpVector);
+	FVector TangentA = FVector::CrossProduct(SurfaceNormal, ViewDirection).GetSafeNormal();
+	if (TangentA.IsNearlyZero())
+	{
+		TangentA = FVector::CrossProduct(SurfaceNormal, FVector::UpVector).GetSafeNormal();
+	}
+	if (TangentA.IsNearlyZero())
+	{
+		TangentA = FVector::CrossProduct(SurfaceNormal, FVector::RightVector).GetSafeNormal();
+	}
+
+	const FVector TangentB = FVector::CrossProduct(TangentA, SurfaceNormal).GetSafeNormal();
+	if (TangentA.IsNearlyZero() || TangentB.IsNearlyZero())
+	{
+		return FallbackDiameter;
+	}
+
+	FVector2D CenterScreen;
+	FVector2D TangentAScreen;
+	FVector2D TangentBScreen;
+	if (!PlayerController.ProjectWorldLocationToScreen(Hit.ImpactPoint, CenterScreen, true)
+		|| !PlayerController.ProjectWorldLocationToScreen(Hit.ImpactPoint + TangentA * BrushRadiusCm, TangentAScreen, true)
+		|| !PlayerController.ProjectWorldLocationToScreen(Hit.ImpactPoint + TangentB * BrushRadiusCm, TangentBScreen, true))
+	{
+		return FallbackDiameter;
+	}
+
+	const float RadiusA = FVector2D::Distance(CenterScreen, TangentAScreen);
+	const float RadiusB = FVector2D::Distance(CenterScreen, TangentBScreen);
+	const float ScreenRadius = FMath::Max(RadiusA, RadiusB);
+	if (!FMath::IsFinite(ScreenRadius) || ScreenRadius <= 0.0f)
+	{
+		return FallbackDiameter;
+	}
+
+	return FMath::Clamp(ScreenRadius * 2.0f, MinDiameter, MaxDiameter);
 }
 
 void AChameleonHiderCharacter::SetColorPickerVisible(bool bVisible)

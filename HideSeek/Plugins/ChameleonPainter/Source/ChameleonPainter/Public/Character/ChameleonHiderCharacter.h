@@ -7,13 +7,13 @@
 
 class AChameleonPaintSprayActor;
 class UCameraComponent;
+class UChameleonBrushCursorWidget;
 class UChameleonColorPickerWidget;
 class UChameleonMetaballBodyComponent;
 class UChameleonPainterInputConfig;
 class UChameleonPaintComponent;
 class UMaterialInterface;
 class USpringArmComponent;
-class UUserWidget;
 
 UCLASS(BlueprintType, Blueprintable)
 class CHAMELEONPAINTER_API AChameleonHiderCharacter : public ACharacter
@@ -51,10 +51,28 @@ public:
 	TSubclassOf<UChameleonColorPickerWidget> ColorPickerWidgetClass;
 
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Chameleon|UI")
-	TSubclassOf<UUserWidget> BrushCursorWidgetClass;
+	TSubclassOf<UChameleonBrushCursorWidget> BrushCursorWidgetClass;
 
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Chameleon|Paint", meta = (ClampMin = "1.0"))
 	float BrushRadiusCm = 18.0f;
+
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Chameleon|Paint", meta = (ClampMin = "1.0"))
+	float MinBrushRadiusCm = 4.0f;
+
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Chameleon|Paint", meta = (ClampMin = "1.0"))
+	float MaxBrushRadiusCm = 72.0f;
+
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Chameleon|Paint", meta = (ClampMin = "0.1"))
+	float BrushRadiusStepCm = 3.0f;
+
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Chameleon|UI", meta = (ClampMin = "0.1"))
+	float BrushCursorFallbackPixelsPerCm = 2.0f;
+
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Chameleon|UI", meta = (ClampMin = "4.0"))
+	float MinBrushCursorDiameterPixels = 24.0f;
+
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Chameleon|UI", meta = (ClampMin = "4.0"))
+	float MaxBrushCursorDiameterPixels = 260.0f;
 
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Chameleon|Paint", meta = (ClampMin = "0.0", ClampMax = "1.0"))
 	float BrushStrength = 1.0f;
@@ -103,6 +121,8 @@ protected:
 	void PaintTriggered();
 	void SampleColor();
 	void ToggleColorPicker();
+	void DecreaseBrushSize();
+	void IncreaseBrushSize();
 
 	UFUNCTION()
 	void HandlePickerColorChanged(FLinearColor Color);
@@ -119,6 +139,8 @@ private:
 	void EnsureColorPicker();
 	void EnsureBrushCursor();
 	void UpdateBrushCursorPosition();
+	void AdjustBrushSize(float DeltaRadiusCm);
+	float CalculateBrushCursorDiameterPixels(const APlayerController& PlayerController) const;
 	void SetColorPickerVisible(bool bVisible);
 
 	UPROPERTY(Transient)
@@ -128,7 +150,7 @@ private:
 	TObjectPtr<UChameleonColorPickerWidget> ColorPickerWidget;
 
 	UPROPERTY(Transient)
-	TObjectPtr<UUserWidget> BrushCursorWidget;
+	TObjectPtr<UChameleonBrushCursorWidget> BrushCursorWidget;
 
 	bool bPaintHeld = false;
 	bool bColorPickerVisible = false;
