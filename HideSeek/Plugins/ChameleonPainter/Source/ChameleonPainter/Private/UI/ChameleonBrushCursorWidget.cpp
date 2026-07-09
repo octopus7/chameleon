@@ -1,7 +1,7 @@
 #include "UI/ChameleonBrushCursorWidget.h"
 
+#include "Brushes/SlateRoundedBoxBrush.h"
 #include "Rendering/DrawElements.h"
-#include "Styling/CoreStyle.h"
 
 namespace
 {
@@ -14,6 +14,7 @@ void AppendBrushCursorCirclePoints(TArray<FVector2D>& OutPoints, const FVector2D
 		OutPoints.Add(Center + FVector2D(FMath::Cos(Angle), FMath::Sin(Angle)) * Radius);
 	}
 }
+
 }
 
 UChameleonBrushCursorWidget::UChameleonBrushCursorWidget(const FObjectInitializer& ObjectInitializer)
@@ -98,26 +99,43 @@ int32 UChameleonBrushCursorWidget::NativePaint(
 			true,
 			3.0f * Scale);
 
-		const FVector2D SampleBoxPosition(38.0f * Scale, 40.0f * Scale);
-		const FVector2D SampleBoxSize(18.0f * Scale, 18.0f * Scale);
-		const FSlateBrush* FillBrush = FCoreStyle::Get().GetBrush(TEXT("WhiteBrush"));
+		const FVector2D SampleCircleCenter(46.0f * Scale, 46.0f * Scale);
+		const float SampleCircleRadius = 18.0f * Scale;
 		const FLinearColor SampleColor = bHasSamplePreviewColor ? SamplePreviewColor : FLinearColor(0.12f, 0.12f, 0.12f, 0.92f);
+		const FVector2D ShadowPosition = SampleCircleCenter - FVector2D(SampleCircleRadius + 4.0f * Scale, SampleCircleRadius + 4.0f * Scale);
+		const FVector2D ShadowSize = FVector2D((SampleCircleRadius + 4.0f * Scale) * 2.0f);
+		const FVector2D SamplePosition = SampleCircleCenter - FVector2D(SampleCircleRadius, SampleCircleRadius);
+		const FVector2D SampleSize = FVector2D(SampleCircleRadius * 2.0f);
+		const FSlateRoundedBoxBrush ShadowBrush(FLinearColor::White, SampleCircleRadius + 4.0f * Scale, ShadowSize);
+		const FSlateRoundedBoxBrush SampleBrush(FLinearColor::White, SampleCircleRadius, SampleSize);
 		FSlateDrawElement::MakeBox(
 			OutDrawElements,
 			PaintedLayer + 3,
-			AllottedGeometry.ToPaintGeometry(SampleBoxSize + FVector2D(4.0f * Scale, 4.0f * Scale), FSlateLayoutTransform(SampleBoxPosition - FVector2D(2.0f * Scale, 2.0f * Scale))),
-			FillBrush,
+			AllottedGeometry.ToPaintGeometry(ShadowSize, FSlateLayoutTransform(ShadowPosition)),
+			&ShadowBrush,
 			ESlateDrawEffect::None,
-			FLinearColor(0.0f, 0.0f, 0.0f, 0.92f));
+			FLinearColor(0.0f, 0.0f, 0.0f, 0.64f));
 		FSlateDrawElement::MakeBox(
 			OutDrawElements,
 			PaintedLayer + 4,
-			AllottedGeometry.ToPaintGeometry(SampleBoxSize, FSlateLayoutTransform(SampleBoxPosition)),
-			FillBrush,
+			AllottedGeometry.ToPaintGeometry(SampleSize, FSlateLayoutTransform(SamplePosition)),
+			&SampleBrush,
 			ESlateDrawEffect::None,
 			SampleColor);
 
-		return PaintedLayer + 4;
+		TArray<FVector2D> SampleCirclePoints;
+		AppendBrushCursorCirclePoints(SampleCirclePoints, SampleCircleCenter, SampleCircleRadius, 72);
+		FSlateDrawElement::MakeLines(
+			OutDrawElements,
+			PaintedLayer + 5,
+			AllottedGeometry.ToPaintGeometry(),
+			SampleCirclePoints,
+			ESlateDrawEffect::None,
+			FLinearColor(0.02f, 0.02f, 0.02f, 0.95f),
+			true,
+			2.0f * Scale);
+
+		return PaintedLayer + 5;
 	}
 
 	const float MaxStrokeThickness = FMath::Max(OuterStrokeThickness, InnerStrokeThickness);

@@ -476,6 +476,7 @@ void AChameleonHiderCharacter::PickEyedropperColor()
 	{
 		BrushCursorWidget->SetSamplePreviewColor(CurrentBrushColor, true);
 	}
+	SetEyedropperModeActive(false);
 }
 
 void AChameleonHiderCharacter::SpawnPaintSprayEffect(const FHitResult& Hit)

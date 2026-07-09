@@ -24,6 +24,11 @@ const FLinearColor PanelColor(0.015f, 0.018f, 0.022f, 0.93f);
 const FLinearColor GroupColor(0.025f, 0.03f, 0.036f, 0.86f);
 const FLinearColor TextColor(0.94f, 0.94f, 0.94f, 1.0f);
 const FLinearColor MutedTrackColor(0.34f, 0.34f, 0.34f, 1.0f);
+const FLinearColor ValueBoxBackgroundColor(0.055f, 0.06f, 0.068f, 1.0f);
+const FLinearColor ValueBoxHoverColor(0.075f, 0.085f, 0.098f, 1.0f);
+const FLinearColor ValueBoxActiveColor(0.095f, 0.11f, 0.13f, 1.0f);
+const FLinearColor ValueBoxFillColor(0.14f, 0.17f, 0.2f, 1.0f);
+const FLinearColor ValueBoxTextColor(0.94f, 0.96f, 1.0f, 1.0f);
 
 float ClampUnit(float Value)
 {
@@ -72,6 +77,27 @@ void ApplySliderAccent(USlider* Slider, const FLinearColor& AccentColor)
 	SliderStyle.HoveredThumbImage.TintColor = FSlateColor(FLinearColor(1.0f, 1.0f, 1.0f, 1.0f));
 	SliderStyle.DisabledThumbImage.TintColor = FSlateColor(FLinearColor(0.45f, 0.45f, 0.45f, 1.0f));
 	Slider->SetWidgetStyle(SliderStyle);
+}
+
+void ApplyValueBoxStyle(USpinBox* ValueBox)
+{
+	if (!ValueBox)
+	{
+		return;
+	}
+
+	FSpinBoxStyle SpinBoxStyle = ValueBox->GetWidgetStyle();
+	SpinBoxStyle.BackgroundBrush.TintColor = FSlateColor(ValueBoxBackgroundColor);
+	SpinBoxStyle.HoveredBackgroundBrush.TintColor = FSlateColor(ValueBoxHoverColor);
+	SpinBoxStyle.ActiveBackgroundBrush.TintColor = FSlateColor(ValueBoxActiveColor);
+	SpinBoxStyle.InactiveFillBrush.TintColor = FSlateColor(ValueBoxFillColor);
+	SpinBoxStyle.HoveredFillBrush.TintColor = FSlateColor(ValueBoxFillColor.CopyWithNewOpacity(0.92f));
+	SpinBoxStyle.ActiveFillBrush.TintColor = FSlateColor(ValueBoxFillColor.CopyWithNewOpacity(0.95f));
+	SpinBoxStyle.ArrowsImage.TintColor = FSlateColor(ValueBoxTextColor.CopyWithNewOpacity(0.78f));
+	SpinBoxStyle.SetForegroundColor(FSlateColor(ValueBoxTextColor));
+	SpinBoxStyle.SetTextPadding(FMargin(4.0f, 1.0f));
+	ValueBox->SetWidgetStyle(SpinBoxStyle);
+	ValueBox->SetForegroundColor(FSlateColor(ValueBoxTextColor));
 }
 }
 
@@ -224,6 +250,15 @@ void UChameleonColorPickerWidget::BindGeneratedWidgetTree()
 			HeaderRow->AddChildToHorizontalBox(EyedropperSize);
 		}
 	}
+
+	ApplyValueBoxStyle(RedValueBox);
+	ApplyValueBoxStyle(GreenValueBox);
+	ApplyValueBoxStyle(BlueValueBox);
+	ApplyValueBoxStyle(HueValueBox);
+	ApplyValueBoxStyle(SaturationValueBox);
+	ApplyValueBoxStyle(ValueValueBox);
+	ApplyValueBoxStyle(RoughnessValueBox);
+	ApplyValueBoxStyle(MetallicValueBox);
 
 	if (HSVWheel)
 	{
@@ -1132,7 +1167,7 @@ USpinBox* UChameleonColorPickerWidget::MakeValueBox(const FName& Name, float Val
 	ValueBox->SetMinFractionalDigits(0);
 	ValueBox->SetMaxFractionalDigits(0);
 	ValueBox->SetValue(FMath::Clamp(Value, 0.0f, 255.0f));
-	ValueBox->SetForegroundColor(FSlateColor(TextColor));
+	ApplyValueBoxStyle(ValueBox);
 	return ValueBox;
 }
 

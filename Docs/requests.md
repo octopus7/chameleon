@@ -348,3 +348,20 @@
 - `git diff --check`는 공백 오류 없이 통과했고, `HideSeekEditor Win64 Development` 빌드가 성공했다.
 - `ChameleonPainterBuildTestContent` 커맨드렛이 0 errors 및 기존 procedural mesh degenerate triangle warning 2건으로 완료되어 `T_ChameleonEyedropperIcon.uasset`와 갱신된 `WBP_ChameleonColorPicker`가 생성됐다.
 - `HideSeek/HideSeek.uproject`를 Unreal Editor로 다시 실행했고, 최신 로그에서 Fatal, Error, ensure, 컴파일 실패가 없음을 확인했다.
+
+## 2026-07-09 19:22:00 (소요시간: 00:09:03)
+
+- 아이드로퍼로 색상을 찍는 즉시 `SetEyedropperModeActive(false)`를 호출해 같은 페인트 UI 안에서 브러시/페인트 입력 상태로 복귀하도록 변경했다.
+- 아이드로퍼 커서 기본 크기를 64px에서 128px로 키워 화면상의 스포이드 아이콘이 2배 크기로 표시되도록 했다.
+- 커서 위치의 색상 미리보기는 사각형 대신 outline과 그림자가 있는 원형 swatch로 바꾸고, 기존 18px 기준 4배인 72px 크기로 표시되도록 했다.
+- `ChameleonPainterBuildTestContent` 커맨드렛이 캐릭터 BP 기본값의 `EyedropperCursorSizePixels`도 128px로 저장하도록 갱신했다.
+- `git diff --check`는 공백 오류 없이 통과했고, 에디터 Live Coding 활성 상태 때문에 한 번 빌드가 막힌 뒤 에디터를 정상 종료하고 `HideSeekEditor Win64 Development` 빌드가 성공했다.
+- `ChameleonPainterBuildTestContent` 커맨드렛은 0 errors 및 기존 procedural mesh degenerate triangle warning 2건으로 완료됐고, `HideSeek/HideSeek.uproject`를 Unreal Editor로 다시 실행한 뒤 최신 로그에서 Fatal, Error, ensure, 컴파일 실패가 없음을 확인했다.
+
+## 2026-07-09 19:32:00 (소요시간: 00:07:22)
+
+- 아이드로퍼 hover 미리보기 원이 항상 흰색으로 보이던 문제를 수정했다.
+- 미리보기 원을 rounded-box brush fill 대신 Slate custom vertex circle로 그려 샘플 색상이 vertex color로 직접 반영되도록 변경했다.
+- 색상 수치 `USpinBox` 입력칸은 어두운 배경, hover/active 어두운 상태색, 밝은 숫자/화살표 색으로 스타일링되도록 C++ 런타임 fallback과 WBP 생성 커맨드렛 양쪽에 적용했다.
+- `HideSeekEditor Win64 Development` 빌드가 성공했고, `ChameleonPainterBuildTestContent` 커맨드렛은 0 errors 및 기존 procedural mesh degenerate triangle warning 2건으로 완료됐다.
+- `HideSeek/HideSeek.uproject`를 Unreal Editor로 다시 실행했고, 최신 로그에서 Fatal, Error, ensure, 컴파일 실패가 없음을 확인했다.

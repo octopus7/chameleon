@@ -653,6 +653,33 @@ USlider* CreateColorPickerSlider(UWidgetTree* WidgetTree, const FName& Name, flo
 	return Slider;
 }
 
+void ApplyColorPickerValueBoxStyle(USpinBox* SpinBox)
+{
+	if (!SpinBox)
+	{
+		return;
+	}
+
+	const FLinearColor BackgroundColor(0.055f, 0.06f, 0.068f, 1.0f);
+	const FLinearColor HoverColor(0.075f, 0.085f, 0.098f, 1.0f);
+	const FLinearColor ActiveColor(0.095f, 0.11f, 0.13f, 1.0f);
+	const FLinearColor FillColor(0.14f, 0.17f, 0.2f, 1.0f);
+	const FLinearColor TextColor(0.94f, 0.96f, 1.0f, 1.0f);
+
+	FSpinBoxStyle SpinBoxStyle = SpinBox->GetWidgetStyle();
+	SpinBoxStyle.BackgroundBrush.TintColor = FSlateColor(BackgroundColor);
+	SpinBoxStyle.HoveredBackgroundBrush.TintColor = FSlateColor(HoverColor);
+	SpinBoxStyle.ActiveBackgroundBrush.TintColor = FSlateColor(ActiveColor);
+	SpinBoxStyle.InactiveFillBrush.TintColor = FSlateColor(FillColor);
+	SpinBoxStyle.HoveredFillBrush.TintColor = FSlateColor(FillColor.CopyWithNewOpacity(0.92f));
+	SpinBoxStyle.ActiveFillBrush.TintColor = FSlateColor(FillColor.CopyWithNewOpacity(0.95f));
+	SpinBoxStyle.ArrowsImage.TintColor = FSlateColor(TextColor.CopyWithNewOpacity(0.78f));
+	SpinBoxStyle.SetForegroundColor(FSlateColor(TextColor));
+	SpinBoxStyle.SetTextPadding(FMargin(4.0f, 1.0f));
+	SpinBox->SetWidgetStyle(SpinBoxStyle);
+	SpinBox->SetForegroundColor(FSlateColor(TextColor));
+}
+
 USpinBox* CreateColorPickerValueBox(UWidgetTree* WidgetTree, const FName& Name, float InitialValue)
 {
 	USpinBox* SpinBox = WidgetTree->ConstructWidget<USpinBox>(USpinBox::StaticClass(), Name);
@@ -664,7 +691,7 @@ USpinBox* CreateColorPickerValueBox(UWidgetTree* WidgetTree, const FName& Name, 
 	SpinBox->SetMinFractionalDigits(0);
 	SpinBox->SetMaxFractionalDigits(0);
 	SpinBox->SetValue(FMath::Clamp(InitialValue, 0.0f, 255.0f));
-	SpinBox->SetForegroundColor(FSlateColor(FLinearColor::White));
+	ApplyColorPickerValueBoxStyle(SpinBox);
 	return SpinBox;
 }
 
@@ -1392,6 +1419,7 @@ void ConfigureBlueprints(UChameleonPainterInputConfig* InputConfig, UMaterialInt
 		CharacterCDO->BrushCursorFallbackPixelsPerCm = 2.0f;
 		CharacterCDO->MinBrushCursorDiameterPixels = 24.0f;
 		CharacterCDO->MaxBrushCursorDiameterPixels = 260.0f;
+		CharacterCDO->EyedropperCursorSizePixels = 128.0f;
 		CharacterCDO->CurrentBrushColor = GetDefaultBrushColor();
 		CharacterCDO->CurrentBrushRoughness = GetDefaultBrushRoughness();
 		CharacterCDO->CurrentBrushMetallic = GetDefaultBrushMetallic();

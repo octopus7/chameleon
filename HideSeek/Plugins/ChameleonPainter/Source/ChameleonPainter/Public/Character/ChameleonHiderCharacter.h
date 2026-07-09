@@ -105,8 +105,8 @@ public:
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Chameleon|Paint")
 	EChameleonColorPickSource ColorPickSource = EChameleonColorPickSource::SurfaceData;
 
-	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Chameleon|UI", meta = (ClampMin = "24.0", ClampMax = "128.0"))
-	float EyedropperCursorSizePixels = 64.0f;
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Chameleon|UI", meta = (ClampMin = "24.0", ClampMax = "256.0"))
+	float EyedropperCursorSizePixels = 128.0f;
 
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Chameleon|Paint|Effects")
 	TSubclassOf<AChameleonPaintSprayActor> PaintSprayEffectClass;
