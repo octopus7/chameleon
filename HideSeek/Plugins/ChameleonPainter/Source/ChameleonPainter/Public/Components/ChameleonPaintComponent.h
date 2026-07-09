@@ -39,10 +39,16 @@ public:
 	TObjectPtr<UPrimitiveComponent> TargetComponent;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Chameleon|Paint")
-	FLinearColor PaintColor = FLinearColor(0.84f, 0.82f, 0.76f, 1.0f);
+	FLinearColor PaintColor = FLinearColor(1.0f, 0.02f, 0.02f, 1.0f);
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Chameleon|Paint")
 	bool bApplyOnRegister = true;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Chameleon|Paint")
+	bool bApplyOnBeginPlay = true;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Chameleon|Paint")
+	bool bApplyOnTargetComponentChange = true;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Chameleon|Paint")
 	bool bApplyToAllMaterialSlots = true;

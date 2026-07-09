@@ -106,7 +106,7 @@ public:
 	bool bBuildQueryCollision = false;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Chameleon|Paint")
-	FLinearColor CamouflageBaseColor = FLinearColor(0.84f, 0.82f, 0.76f, 1.0f);
+	FLinearColor CamouflageBaseColor = FLinearColor::White;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Chameleon|Paint")
 	TArray<FName> PaintColorParameterNames;

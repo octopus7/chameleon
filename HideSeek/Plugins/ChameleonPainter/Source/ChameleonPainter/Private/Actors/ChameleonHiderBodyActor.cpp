@@ -12,6 +12,9 @@ AChameleonHiderBodyActor::AChameleonHiderBodyActor()
 
 	PaintComponent = CreateDefaultSubobject<UChameleonPaintComponent>(TEXT("PaintComponent"));
 	PaintComponent->TargetComponent = BodyComponent;
+	PaintComponent->bApplyOnRegister = false;
+	PaintComponent->bApplyOnBeginPlay = false;
+	PaintComponent->bApplyOnTargetComponentChange = false;
 }
 
 void AChameleonHiderBodyActor::OnConstruction(const FTransform& Transform)

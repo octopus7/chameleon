@@ -64,7 +64,7 @@ public:
 	float SampleTraceDistance = 2000.0f;
 
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Chameleon|Paint")
-	FLinearColor CurrentBrushColor = FLinearColor(0.84f, 0.82f, 0.76f, 1.0f);
+	FLinearColor CurrentBrushColor = FLinearColor(1.0f, 0.02f, 0.02f, 1.0f);
 
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Chameleon|Paint")
 	TArray<FName> SampleColorParameterNames;

@@ -14,14 +14,17 @@ UChameleonColorPickerWidget::UChameleonColorPickerWidget(const FObjectInitialize
 	: Super(ObjectInitializer)
 {
 	SwatchColors = {
-		FLinearColor(0.84f, 0.82f, 0.76f, 1.0f),
-		FLinearColor(0.12f, 0.12f, 0.10f, 1.0f),
-		FLinearColor(0.64f, 0.58f, 0.46f, 1.0f),
-		FLinearColor(0.38f, 0.48f, 0.34f, 1.0f),
-		FLinearColor(0.52f, 0.60f, 0.62f, 1.0f),
-		FLinearColor(0.72f, 0.36f, 0.27f, 1.0f),
-		FLinearColor(0.28f, 0.31f, 0.43f, 1.0f),
-		FLinearColor(0.92f, 0.90f, 0.84f, 1.0f)
+		FLinearColor(1.0f, 0.02f, 0.02f, 1.0f),
+		FLinearColor(1.0f, 0.42f, 0.0f, 1.0f),
+		FLinearColor(1.0f, 0.92f, 0.0f, 1.0f),
+		FLinearColor(0.05f, 1.0f, 0.08f, 1.0f),
+		FLinearColor(0.0f, 0.85f, 1.0f, 1.0f),
+		FLinearColor(0.02f, 0.18f, 1.0f, 1.0f),
+		FLinearColor(0.58f, 0.0f, 1.0f, 1.0f),
+		FLinearColor(1.0f, 0.0f, 0.65f, 1.0f),
+		FLinearColor::White,
+		FLinearColor::Black,
+		FLinearColor(0.5f, 0.5f, 0.5f, 1.0f)
 	};
 }
 
@@ -92,6 +95,9 @@ void UChameleonColorPickerWidget::BindGeneratedWidgetTree()
 	BindSwatchButton(FName(TEXT("Swatch5")), 5);
 	BindSwatchButton(FName(TEXT("Swatch6")), 6);
 	BindSwatchButton(FName(TEXT("Swatch7")), 7);
+	BindSwatchButton(FName(TEXT("Swatch8")), 8);
+	BindSwatchButton(FName(TEXT("Swatch9")), 9);
+	BindSwatchButton(FName(TEXT("Swatch10")), 10);
 }
 
 void UChameleonColorPickerWidget::BindSwatchButton(const FName& WidgetName, int32 SwatchIndex)
@@ -127,6 +133,15 @@ void UChameleonColorPickerWidget::BindSwatchButton(const FName& WidgetName, int3
 		break;
 	case 7:
 		SwatchButton->OnClicked.AddUniqueDynamic(this, &UChameleonColorPickerWidget::HandleSwatch7Clicked);
+		break;
+	case 8:
+		SwatchButton->OnClicked.AddUniqueDynamic(this, &UChameleonColorPickerWidget::HandleSwatch8Clicked);
+		break;
+	case 9:
+		SwatchButton->OnClicked.AddUniqueDynamic(this, &UChameleonColorPickerWidget::HandleSwatch9Clicked);
+		break;
+	case 10:
+		SwatchButton->OnClicked.AddUniqueDynamic(this, &UChameleonColorPickerWidget::HandleSwatch10Clicked);
 		break;
 	default:
 		break;
@@ -232,6 +247,21 @@ void UChameleonColorPickerWidget::HandleSwatch7Clicked()
 	ChooseSwatch(7);
 }
 
+void UChameleonColorPickerWidget::HandleSwatch8Clicked()
+{
+	ChooseSwatch(8);
+}
+
+void UChameleonColorPickerWidget::HandleSwatch9Clicked()
+{
+	ChooseSwatch(9);
+}
+
+void UChameleonColorPickerWidget::HandleSwatch10Clicked()
+{
+	ChooseSwatch(10);
+}
+
 void UChameleonColorPickerWidget::BuildDefaultWidgetTree()
 {
 	if (!WidgetTree)
@@ -254,11 +284,11 @@ void UChameleonColorPickerWidget::BuildDefaultWidgetTree()
 	RootBox->AddChildToVerticalBox(PreviewSizeBox);
 
 	UHorizontalBox* SwatchRow = WidgetTree->ConstructWidget<UHorizontalBox>(UHorizontalBox::StaticClass(), TEXT("Swatches"));
-	for (int32 Index = 0; Index < 8; ++Index)
+	for (int32 Index = 0; Index < SwatchColors.Num(); ++Index)
 	{
 		USizeBox* SwatchSizeBox = WidgetTree->ConstructWidget<USizeBox>(USizeBox::StaticClass());
-		SwatchSizeBox->SetWidthOverride(34.0f);
-		SwatchSizeBox->SetHeightOverride(34.0f);
+		SwatchSizeBox->SetWidthOverride(26.0f);
+		SwatchSizeBox->SetHeightOverride(26.0f);
 		SwatchSizeBox->SetContent(MakeSwatchButton(FName(*FString::Printf(TEXT("Swatch%d"), Index)), Index));
 		SwatchRow->AddChildToHorizontalBox(SwatchSizeBox);
 	}
@@ -394,6 +424,15 @@ UButton* UChameleonColorPickerWidget::MakeSwatchButton(const FName& Name, int32 
 		break;
 	case 7:
 		SwatchButton->OnClicked.AddDynamic(this, &UChameleonColorPickerWidget::HandleSwatch7Clicked);
+		break;
+	case 8:
+		SwatchButton->OnClicked.AddDynamic(this, &UChameleonColorPickerWidget::HandleSwatch8Clicked);
+		break;
+	case 9:
+		SwatchButton->OnClicked.AddDynamic(this, &UChameleonColorPickerWidget::HandleSwatch9Clicked);
+		break;
+	case 10:
+		SwatchButton->OnClicked.AddDynamic(this, &UChameleonColorPickerWidget::HandleSwatch10Clicked);
 		break;
 	default:
 		break;

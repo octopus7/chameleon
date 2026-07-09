@@ -28,14 +28,21 @@ void UChameleonPaintComponent::OnRegister()
 void UChameleonPaintComponent::BeginPlay()
 {
 	Super::BeginPlay();
-	ApplyPaintColor();
+
+	if (bApplyOnBeginPlay)
+	{
+		ApplyPaintColor();
+	}
 }
 
 void UChameleonPaintComponent::SetTargetComponent(UPrimitiveComponent* NewTargetComponent)
 {
 	TargetComponent = NewTargetComponent;
 	DynamicMaterialInstances.Reset();
-	ApplyPaintColor();
+	if (bApplyOnTargetComponentChange)
+	{
+		ApplyPaintColor();
+	}
 }
 
 void UChameleonPaintComponent::SetPaintColor(FLinearColor NewColor)

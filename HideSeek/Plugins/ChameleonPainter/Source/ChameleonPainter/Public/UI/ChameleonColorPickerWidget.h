@@ -32,7 +32,7 @@ public:
 	void SetTargetPaintComponent(UChameleonPaintComponent* NewTargetPaintComponent);
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Chameleon|Color Picker")
-	FLinearColor SelectedColor = FLinearColor(0.84f, 0.82f, 0.76f, 1.0f);
+	FLinearColor SelectedColor = FLinearColor(1.0f, 0.02f, 0.02f, 1.0f);
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Chameleon|Color Picker")
 	TArray<FLinearColor> SwatchColors;
@@ -85,6 +85,15 @@ protected:
 
 	UFUNCTION()
 	void HandleSwatch7Clicked();
+
+	UFUNCTION()
+	void HandleSwatch8Clicked();
+
+	UFUNCTION()
+	void HandleSwatch9Clicked();
+
+	UFUNCTION()
+	void HandleSwatch10Clicked();
 
 private:
 	void BuildDefaultWidgetTree();

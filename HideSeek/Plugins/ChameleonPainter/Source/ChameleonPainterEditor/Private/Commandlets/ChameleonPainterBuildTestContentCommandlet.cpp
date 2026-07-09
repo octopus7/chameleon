@@ -511,6 +511,123 @@ UTextBlock* CreateWidgetText(UWidgetTree* WidgetTree, const FName& Name, const F
 	return TextBlock;
 }
 
+FLinearColor GetDefaultBrushColor()
+{
+	return FLinearColor(1.0f, 0.02f, 0.02f, 1.0f);
+}
+
+FLinearColor GetDefaultBodyColor()
+{
+	return FLinearColor::White;
+}
+
+TArray<FLinearColor> GetHighVisibilitySwatchColors()
+{
+	return {
+		FLinearColor(1.0f, 0.02f, 0.02f, 1.0f),
+		FLinearColor(1.0f, 0.42f, 0.0f, 1.0f),
+		FLinearColor(1.0f, 0.92f, 0.0f, 1.0f),
+		FLinearColor(0.05f, 1.0f, 0.08f, 1.0f),
+		FLinearColor(0.0f, 0.85f, 1.0f, 1.0f),
+		FLinearColor(0.02f, 0.18f, 1.0f, 1.0f),
+		FLinearColor(0.58f, 0.0f, 1.0f, 1.0f),
+		FLinearColor(1.0f, 0.0f, 0.65f, 1.0f),
+		FLinearColor::White,
+		FLinearColor::Black,
+		FLinearColor(0.5f, 0.5f, 0.5f, 1.0f)
+	};
+}
+
+void EnsureWidgetVariableGuid(UWidgetBlueprint* WidgetBlueprint, UWidget* Widget)
+{
+	if (WidgetBlueprint && Widget && !WidgetBlueprint->WidgetVariableNameToGuidMap.Contains(Widget->GetFName()))
+	{
+		WidgetBlueprint->OnVariableAdded(Widget->GetFName());
+	}
+}
+
+void EnsureWidgetTreeVariableGuids(UWidgetBlueprint* WidgetBlueprint, UWidgetTree* WidgetTree)
+{
+	if (!WidgetBlueprint || !WidgetTree)
+	{
+		return;
+	}
+
+	TArray<UWidget*> Widgets;
+	WidgetTree->GetAllWidgets(Widgets);
+	for (UWidget* Widget : Widgets)
+	{
+		EnsureWidgetVariableGuid(WidgetBlueprint, Widget);
+	}
+}
+
+void ApplyColorPickerSwatchColors(UWidgetBlueprint* WidgetBlueprint, UWidgetTree* WidgetTree)
+{
+	if (!WidgetTree)
+	{
+		return;
+	}
+
+	const TArray<FLinearColor> SwatchColors = GetHighVisibilitySwatchColors();
+	if (UBorder* ColorPreview = Cast<UBorder>(WidgetTree->FindWidget(FName(TEXT("ColorPreview")))))
+	{
+		ColorPreview->SetBrushColor(GetDefaultBrushColor());
+	}
+
+	USizeBox* ColorPickerSize = Cast<USizeBox>(WidgetTree->FindWidget(FName(TEXT("ColorPickerSize"))));
+	if (!ColorPickerSize)
+	{
+		ColorPickerSize = Cast<USizeBox>(WidgetTree->RootWidget);
+	}
+	if (ColorPickerSize)
+	{
+		ColorPickerSize->SetWidthOverride(400.0f);
+		ColorPickerSize->SetHeightOverride(220.0f);
+	}
+
+	UHorizontalBox* SwatchRow = Cast<UHorizontalBox>(WidgetTree->FindWidget(FName(TEXT("Swatches"))));
+	for (int32 Index = 0; Index < SwatchColors.Num(); ++Index)
+	{
+		USizeBox* SwatchSize = Cast<USizeBox>(WidgetTree->FindWidget(FName(*FString::Printf(TEXT("SwatchSize%d"), Index))));
+		if (!SwatchSize && SwatchRow)
+		{
+			SwatchSize = WidgetTree->ConstructWidget<USizeBox>(
+				USizeBox::StaticClass(),
+				FName(*FString::Printf(TEXT("SwatchSize%d"), Index)));
+			EnsureWidgetVariableGuid(WidgetBlueprint, SwatchSize);
+			if (UHorizontalBoxSlot* SwatchSlot = SwatchRow->AddChildToHorizontalBox(SwatchSize))
+			{
+				SwatchSlot->SetPadding(FMargin(0.0f, 0.0f, 4.0f, 0.0f));
+			}
+		}
+		if (SwatchSize)
+		{
+			SwatchSize->SetWidthOverride(26.0f);
+			SwatchSize->SetHeightOverride(26.0f);
+			if (UHorizontalBoxSlot* SwatchSlot = Cast<UHorizontalBoxSlot>(SwatchSize->Slot))
+			{
+				SwatchSlot->SetPadding(FMargin(0.0f, 0.0f, 4.0f, 0.0f));
+			}
+		}
+
+		UButton* SwatchButton = Cast<UButton>(WidgetTree->FindWidget(FName(*FString::Printf(TEXT("Swatch%d"), Index))));
+		if (!SwatchButton && SwatchSize)
+		{
+			SwatchButton = WidgetTree->ConstructWidget<UButton>(
+				UButton::StaticClass(),
+				FName(*FString::Printf(TEXT("Swatch%d"), Index)));
+			EnsureWidgetVariableGuid(WidgetBlueprint, SwatchButton);
+			SwatchSize->SetContent(SwatchButton);
+		}
+		if (SwatchButton)
+		{
+			SwatchButton->SetBackgroundColor(SwatchColors[Index]);
+		}
+	}
+
+	EnsureWidgetTreeVariableGuids(WidgetBlueprint, WidgetTree);
+}
+
 void RebuildColorPickerWidgetTree(UWidgetBlueprint* WidgetBlueprint)
 {
 	if (!WidgetBlueprint)
@@ -524,8 +641,17 @@ void RebuildColorPickerWidgetTree(UWidgetBlueprint* WidgetBlueprint)
 	}
 
 	UWidgetTree* WidgetTree = WidgetBlueprint->WidgetTree;
-	if (!WidgetTree || WidgetTree->RootWidget)
+	if (!WidgetTree)
 	{
+		return;
+	}
+	if (WidgetTree->RootWidget)
+	{
+		WidgetBlueprint->Modify();
+		WidgetTree->Modify();
+		ApplyColorPickerSwatchColors(WidgetBlueprint, WidgetTree);
+		FBlueprintEditorUtils::MarkBlueprintAsStructurallyModified(WidgetBlueprint);
+		WidgetBlueprint->MarkPackageDirty();
 		return;
 	}
 
@@ -533,28 +659,34 @@ void RebuildColorPickerWidgetTree(UWidgetBlueprint* WidgetBlueprint)
 	WidgetTree->Modify();
 
 	USizeBox* ColorPickerSize = WidgetTree->ConstructWidget<USizeBox>(USizeBox::StaticClass(), TEXT("ColorPickerSize"));
-	ColorPickerSize->SetWidthOverride(320.0f);
+	EnsureWidgetVariableGuid(WidgetBlueprint, ColorPickerSize);
+	ColorPickerSize->SetWidthOverride(400.0f);
 	ColorPickerSize->SetHeightOverride(220.0f);
 	WidgetTree->RootWidget = ColorPickerSize;
 
 	UBorder* PanelBorder = WidgetTree->ConstructWidget<UBorder>(UBorder::StaticClass(), TEXT("BrushColorPanel"));
+	EnsureWidgetVariableGuid(WidgetBlueprint, PanelBorder);
 	PanelBorder->SetBrushColor(FLinearColor(0.02f, 0.025f, 0.028f, 0.92f));
 	PanelBorder->SetPadding(FMargin(12.0f));
 	ColorPickerSize->SetContent(PanelBorder);
 
 	UVerticalBox* RootBox = WidgetTree->ConstructWidget<UVerticalBox>(UVerticalBox::StaticClass(), TEXT("ColorPickerRoot"));
+	EnsureWidgetVariableGuid(WidgetBlueprint, RootBox);
 	PanelBorder->SetContent(RootBox);
 
 	UTextBlock* TitleText = CreateWidgetText(WidgetTree, TEXT("TitleText"), FText::FromString(TEXT("Brush Color")));
+	EnsureWidgetVariableGuid(WidgetBlueprint, TitleText);
 	if (UVerticalBoxSlot* TitleSlot = RootBox->AddChildToVerticalBox(TitleText))
 	{
 		TitleSlot->SetPadding(FMargin(0.0f, 0.0f, 0.0f, 8.0f));
 	}
 
 	USizeBox* PreviewSize = WidgetTree->ConstructWidget<USizeBox>(USizeBox::StaticClass(), TEXT("PreviewSize"));
+	EnsureWidgetVariableGuid(WidgetBlueprint, PreviewSize);
 	PreviewSize->SetHeightOverride(30.0f);
 	UBorder* ColorPreview = WidgetTree->ConstructWidget<UBorder>(UBorder::StaticClass(), TEXT("ColorPreview"));
-	ColorPreview->SetBrushColor(FLinearColor(0.84f, 0.82f, 0.76f, 1.0f));
+	EnsureWidgetVariableGuid(WidgetBlueprint, ColorPreview);
+	ColorPreview->SetBrushColor(GetDefaultBrushColor());
 	PreviewSize->SetContent(ColorPreview);
 	if (UVerticalBoxSlot* PreviewSlot = RootBox->AddChildToVerticalBox(PreviewSize))
 	{
@@ -562,33 +694,27 @@ void RebuildColorPickerWidgetTree(UWidgetBlueprint* WidgetBlueprint)
 	}
 
 	UHorizontalBox* SwatchRow = WidgetTree->ConstructWidget<UHorizontalBox>(UHorizontalBox::StaticClass(), TEXT("Swatches"));
-	const TArray<FLinearColor> SwatchColors = {
-		FLinearColor(0.84f, 0.82f, 0.76f, 1.0f),
-		FLinearColor(0.12f, 0.12f, 0.10f, 1.0f),
-		FLinearColor(0.64f, 0.58f, 0.46f, 1.0f),
-		FLinearColor(0.38f, 0.48f, 0.34f, 1.0f),
-		FLinearColor(0.52f, 0.60f, 0.62f, 1.0f),
-		FLinearColor(0.72f, 0.36f, 0.27f, 1.0f),
-		FLinearColor(0.28f, 0.31f, 0.43f, 1.0f),
-		FLinearColor(0.92f, 0.90f, 0.84f, 1.0f)
-	};
+	EnsureWidgetVariableGuid(WidgetBlueprint, SwatchRow);
+	const TArray<FLinearColor> SwatchColors = GetHighVisibilitySwatchColors();
 	for (int32 Index = 0; Index < SwatchColors.Num(); ++Index)
 	{
 		USizeBox* SwatchSize = WidgetTree->ConstructWidget<USizeBox>(
 			USizeBox::StaticClass(),
 			FName(*FString::Printf(TEXT("SwatchSize%d"), Index)));
-		SwatchSize->SetWidthOverride(30.0f);
-		SwatchSize->SetHeightOverride(30.0f);
+		EnsureWidgetVariableGuid(WidgetBlueprint, SwatchSize);
+		SwatchSize->SetWidthOverride(26.0f);
+		SwatchSize->SetHeightOverride(26.0f);
 
 		UButton* SwatchButton = WidgetTree->ConstructWidget<UButton>(
 			UButton::StaticClass(),
 			FName(*FString::Printf(TEXT("Swatch%d"), Index)));
+		EnsureWidgetVariableGuid(WidgetBlueprint, SwatchButton);
 		SwatchButton->SetBackgroundColor(SwatchColors[Index]);
 		SwatchSize->SetContent(SwatchButton);
 
 		if (UHorizontalBoxSlot* SwatchSlot = SwatchRow->AddChildToHorizontalBox(SwatchSize))
 		{
-			SwatchSlot->SetPadding(FMargin(0.0f, 0.0f, 6.0f, 0.0f));
+			SwatchSlot->SetPadding(FMargin(0.0f, 0.0f, 4.0f, 0.0f));
 		}
 	}
 	if (UVerticalBoxSlot* SwatchRowSlot = RootBox->AddChildToVerticalBox(SwatchRow))
@@ -629,8 +755,12 @@ void RebuildColorPickerWidgetTree(UWidgetBlueprint* WidgetBlueprint)
 	AddSliderRow(FText::FromString(TEXT("B")), TEXT("BlueSlider"));
 
 	UButton* CommitButton = WidgetTree->ConstructWidget<UButton>(UButton::StaticClass(), TEXT("CommitButton"));
-	CommitButton->SetContent(CreateWidgetText(WidgetTree, TEXT("CommitText"), FText::FromString(TEXT("Apply"))));
+	EnsureWidgetVariableGuid(WidgetBlueprint, CommitButton);
+	UTextBlock* CommitText = CreateWidgetText(WidgetTree, TEXT("CommitText"), FText::FromString(TEXT("Apply")));
+	EnsureWidgetVariableGuid(WidgetBlueprint, CommitText);
+	CommitButton->SetContent(CommitText);
 	RootBox->AddChildToVerticalBox(CommitButton);
+	EnsureWidgetTreeVariableGuids(WidgetBlueprint, WidgetTree);
 
 	FBlueprintEditorUtils::MarkBlueprintAsStructurallyModified(WidgetBlueprint);
 	WidgetBlueprint->MarkPackageDirty();
@@ -787,6 +917,14 @@ void ConfigureBlueprints(UChameleonPainterInputConfig* InputConfig, UMaterialInt
 		if (CharacterCDO->BodyComponent)
 		{
 			CharacterCDO->BodyComponent->BodyMaterial = HiderMaterial;
+			CharacterCDO->BodyComponent->CamouflageBaseColor = GetDefaultBodyColor();
+		}
+		if (CharacterCDO->PaintComponent)
+		{
+			CharacterCDO->PaintComponent->PaintColor = GetDefaultBrushColor();
+			CharacterCDO->PaintComponent->bApplyOnRegister = false;
+			CharacterCDO->PaintComponent->bApplyOnBeginPlay = false;
+			CharacterCDO->PaintComponent->bApplyOnTargetComponentChange = false;
 		}
 		UClass* ColorPickerWidgetClass = ColorPickerWidgetBlueprint && ColorPickerWidgetBlueprint->GeneratedClass
 			? static_cast<UClass*>(ColorPickerWidgetBlueprint->GeneratedClass.Get())
@@ -795,7 +933,7 @@ void ConfigureBlueprints(UChameleonPainterInputConfig* InputConfig, UMaterialInt
 		CharacterCDO->BrushCursorWidgetClass = BrushCursorWidgetBlueprint && BrushCursorWidgetBlueprint->GeneratedClass
 			? TSubclassOf<UUserWidget>(static_cast<UClass*>(BrushCursorWidgetBlueprint->GeneratedClass.Get()))
 			: TSubclassOf<UUserWidget>();
-		CharacterCDO->CurrentBrushColor = FLinearColor(0.84f, 0.82f, 0.76f, 1.0f);
+		CharacterCDO->CurrentBrushColor = GetDefaultBrushColor();
 		CharacterCDO->MarkPackageDirty();
 		FBlueprintEditorUtils::MarkBlueprintAsModified(CharacterBlueprint);
 	}
@@ -934,11 +1072,15 @@ bool CreateTestLevel(
 		if (PreviewBody->BodyComponent)
 		{
 			PreviewBody->BodyComponent->BodyMaterial = LoadAssetByPackageName<UMaterial>(MaterialPath / TEXT("M_CPT_HiderPaint"));
+			PreviewBody->BodyComponent->CamouflageBaseColor = GetDefaultBodyColor();
 			PreviewBody->BodyComponent->bBuildQueryCollision = true;
 		}
 		if (PreviewBody->PaintComponent)
 		{
+			PreviewBody->PaintComponent->PaintColor = GetDefaultBrushColor();
 			PreviewBody->PaintComponent->bApplyOnRegister = false;
+			PreviewBody->PaintComponent->bApplyOnBeginPlay = false;
+			PreviewBody->PaintComponent->bApplyOnTargetComponentChange = false;
 		}
 		PreviewBody->FinishSpawning(PreviewBodyTransform);
 	}

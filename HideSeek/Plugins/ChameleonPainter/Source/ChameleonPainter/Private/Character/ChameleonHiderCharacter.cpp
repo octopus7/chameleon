@@ -50,6 +50,9 @@ AChameleonHiderCharacter::AChameleonHiderCharacter(const FObjectInitializer& Obj
 
 	PaintComponent = CreateDefaultSubobject<UChameleonPaintComponent>(TEXT("ChameleonPaint"));
 	PaintComponent->TargetComponent = BodyComponent;
+	PaintComponent->bApplyOnRegister = false;
+	PaintComponent->bApplyOnBeginPlay = false;
+	PaintComponent->bApplyOnTargetComponentChange = false;
 
 	SampleColorParameterNames = {
 		TEXT("ChameleonSampleColor"),
@@ -163,10 +166,6 @@ void AChameleonHiderCharacter::SampleColor()
 	if (TraceFromView(SampleTraceDistance, Hit, false) && TrySampleColorFromHit(Hit, SampledColor))
 	{
 		CurrentBrushColor = SampledColor;
-		if (PaintComponent)
-		{
-			PaintComponent->SetPaintColor(CurrentBrushColor);
-		}
 		if (ColorPickerWidget)
 		{
 			ColorPickerWidget->SetSelectedColor(CurrentBrushColor, true);
@@ -348,7 +347,7 @@ void AChameleonHiderCharacter::EnsureColorPicker()
 		ColorPickerWidget->AddToViewport(100);
 		ColorPickerWidget->SetAlignmentInViewport(FVector2D::ZeroVector);
 		ColorPickerWidget->SetPositionInViewport(FVector2D(24.0f, 24.0f), false);
-		ColorPickerWidget->SetDesiredSizeInViewport(FVector2D(320.0f, 220.0f));
+		ColorPickerWidget->SetDesiredSizeInViewport(FVector2D(400.0f, 220.0f));
 	}
 }
 

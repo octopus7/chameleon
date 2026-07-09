@@ -172,3 +172,24 @@
 - 컬러피커가 열린 동안 `Look()` 입력을 무시해 마우스 드래그가 카메라 회전으로 들어가지 않도록 했다.
 - 기존 `TraceFromView` 호출부는 유지하되, 내부에서 컬러피커 표시 상태에 따라 view-center trace와 cursor trace를 전환하도록 정리했다.
 - 검증으로 `HideSeekEditor Win64 Development` 빌드가 성공했다.
+
+## 2026-07-09 13:02:58 (소요시간: 00:01:30)
+
+- 색상 프리셋이 저채도라 칠해도 잘 보이지 않는 문제를 처리했다.
+- `UChameleonColorPickerWidget` 기본 선택색과 swatch 팔레트를 빨강, 주황, 노랑, 라임, 시안, 파랑, 보라, 마젠타의 고채도 8색으로 변경했다.
+- `AChameleonHiderCharacter::CurrentBrushColor`와 `UChameleonPaintComponent::PaintColor` 기본값도 고채도 빨강으로 맞춰 최초 칠하기 결과가 바로 보이도록 했다.
+- `ChameleonPainterBuildTestContent` 커맨드렛에 기존 `WBP_ChameleonColorPicker`의 `ColorPreview`와 `Swatch0~7` 배경색을 갱신하는 로직을 추가해 이미 생성된 WBP 애셋도 같은 팔레트를 쓰도록 했다.
+- 검증으로 `HideSeekEditor Win64 Development` 빌드가 성공했고, `ChameleonPainterBuildTestContent` 커맨드렛이 0 errors, 기존 metaball degenerate triangle warning 2건으로 완료됐다.
+- AGENTS 지침에 따라 검증 후 `HideSeek/HideSeek.uproject`를 Unreal Editor로 다시 열었다.
+
+## 2026-07-09 13:07:19 (소요시간: 00:06:05)
+
+- 컬러 피커에 흰색, 검은색, 50% 회색 프리셋을 추가하고, 캐릭터 기본색은 흰색, 기본 채색 선택색은 빨강으로 분리해 달라는 요청을 처리했다.
+- `UChameleonColorPickerWidget` swatch 팔레트를 기존 고채도 8색에 흰색, 검은색, 50% 회색을 더한 11색으로 확장하고, `Swatch8~10` 클릭 핸들러를 추가했다.
+- `UChameleonMetaballBodyComponent::CamouflageBaseColor` 기본값을 흰색으로 변경했다.
+- `UChameleonPaintComponent`에 BeginPlay/타깃 변경 시 자동 적용 옵션을 추가하고, 캐릭터와 프리뷰 액터에서는 이를 꺼서 브러시 기본 선택색 빨강이 몸 전체 기본색을 덮어쓰지 않도록 했다.
+- 환경 색 샘플링 시에도 `PaintComponent->SetPaintColor()`를 호출하지 않게 해, 샘플 색 변경이 몸 전체 base color 변경으로 이어지지 않도록 했다.
+- `WBP_ChameleonColorPicker` 폭을 400px로 넓히고, 커맨드렛이 기존 WBP에 `Swatch8~10`을 추가하면서 `WidgetBlueprint->OnVariableAdded()`로 UMG GUID를 보강하도록 수정했다.
+- 첫 커맨드렛 실행에서 신규 swatch 위젯 GUID 누락 ensure가 발생했으나, GUID 보강 로직을 추가한 뒤 재빌드 및 재실행해 최종 성공했다.
+- 검증으로 `HideSeekEditor Win64 Development` 빌드가 성공했고, `ChameleonPainterBuildTestContent` 커맨드렛이 0 errors, 기존 metaball degenerate triangle warning 2건으로 완료됐다.
+- AGENTS 지침에 따라 검증 후 `HideSeek/HideSeek.uproject`를 Unreal Editor로 다시 열었다.
