@@ -391,3 +391,20 @@
 - `HideSeekEditor Win64 Development` 빌드가 성공했다.
 - `ChameleonPainterBuildTestContent` commandlet은 0 errors 및 기존 procedural mesh degenerate triangle warning 2건으로 완료됐다.
 - `HideSeek/HideSeek.uproject`를 Unreal Editor로 다시 실행했고, 최신 로그에서 Fatal, Error, ensure, 컴파일 실패가 없음을 확인했다.
+
+## 2026-07-09 23:45:47 (소요시간: 00:18:47)
+
+- 대기방을 persistent lobby로, `PlayRoom`을 streamed sublevel로 쓰는 숨바꼭질 라운드 런타임 구조를 추가했다.
+- 시간/스폰 태그/AI/전환값을 `UHideSeekRoundSettings` DataAsset에서 수정할 수 있도록 분리했다.
+- 서버 권위 `AHideSeekGameMode`, 복제용 `AHideSeekGameState`, `AHideSeekPlayerState`, Pawn용 `UHideSeekRoleComponent`를 추가해 향후 EOS 멀티플레이에서 역할과 phase를 안정적으로 복제할 수 있게 했다.
+- 플레이어와 AI가 같은 participant Pawn/role 구조를 쓰도록 `AHideSeekParticipantCharacter`와 `AHideSeekAIController`를 추가했다. AI는 HideTime에 랜덤 은신 이동, SeekTime에 미발견 hider 추적을 수행한다.
+- 술래 랜덤 선정, 술래 중앙 이동 및 대기, PlayRoom 로딩, HideTime, SeekTime, 제한 시간 종료/전원 발견 라운드 종료 흐름을 구현했다.
+- 클라이언트 전환 연출용 `AHideSeekPlayerController` RPC와 C++ fade/loading 위젯을 추가하고, DataAsset의 Niagara 시스템을 카메라 주변에 attach하도록 했다.
+- `HideSeekEditor` 모듈과 `HideSeekBuildContent` commandlet을 추가해 `DA_HideSeekRoundSettings`, `BP_HideSeekParticipantCharacter`, `BP_HideSeekGameMode`, `L_HideSeek_Lobby`, `L_HideSeek_PlayRoom`을 생성하고 기본 맵을 lobby로 바꾸도록 준비했다.
+- `HideSeekEditor Win64 Development` 빌드는 AppData 로그 권한 문제로 최초 실패했고, 권한 승인 후에는 현재 실행 중인 `UnrealEditor.exe`/`LiveCodingConsole.exe` 때문에 UBT가 빌드를 거부했다. 저장 안 된 에디터 작업 손실 위험이 있어 프로세스 강제 종료는 진행하지 않았고, 빌드 및 commandlet 실행은 에디터 종료 후 이어서 진행해야 한다.
+
+## 2026-07-10 00:07:23 (소요시간: 00:00:28)
+
+- 에디터 실행 요청에 대해 현재 `UnrealEditor.exe`와 `LiveCodingConsole.exe`가 이미 실행 중임을 확인했다.
+- `L_HideSeek_Lobby.umap`과 `L_HideSeek_PlayRoom.umap`이 아직 생성되지 않았음을 확인했다.
+- 저장 안 된 에디터 작업 손실 위험이 있어 실행 중인 에디터를 강제 종료하지 않았고, 에디터 종료 후 빌드와 `HideSeekBuildContent` commandlet을 이어서 실행해야 한다고 안내했다.

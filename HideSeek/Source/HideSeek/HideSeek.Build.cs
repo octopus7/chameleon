@@ -8,7 +8,22 @@ public class HideSeek : ModuleRules
 	{
 		PCHUsage = PCHUsageMode.UseExplicitOrSharedPCHs;
 	
-		PublicDependencyModuleNames.AddRange(new string[] { "Core", "CoreUObject", "Engine", "InputCore", "EnhancedInput" });
+		PublicDependencyModuleNames.AddRange(new string[]
+		{
+			"AIModule",
+			"ChameleonPainter",
+			"Core",
+			"CoreUObject",
+			"Engine",
+			"EnhancedInput",
+			"GameplayTasks",
+			"InputCore",
+			"NavigationSystem",
+			"Niagara",
+			"Slate",
+			"SlateCore",
+			"UMG"
+		});
 
 		PrivateDependencyModuleNames.AddRange(new string[] {  });
 

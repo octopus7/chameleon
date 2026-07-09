@@ -11,5 +11,6 @@ public class HideSeekEditorTarget : TargetRules
 		DefaultBuildSettings = BuildSettingsVersion.V6;
 		IncludeOrderVersion = EngineIncludeOrderVersion.Unreal5_7;
 		ExtraModuleNames.Add("HideSeek");
+		ExtraModuleNames.Add("HideSeekEditor");
 	}
 }
