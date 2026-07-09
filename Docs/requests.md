@@ -372,3 +372,22 @@
 - Slate custom vertex circle은 리소스 핸들 조건 때문에 fill draw가 스킵될 수 있어 제거하고, `FSlateRoundedBoxBrush`를 `MakeBox` tint 색상과 함께 쓰는 원형 fill 경로로 변경했다.
 - `HideSeekEditor Win64 Development` 빌드가 성공했고, `HideSeek/HideSeek.uproject`를 Unreal Editor로 다시 실행했다.
 - 최신 로그에서 Fatal, Error, ensure, 컴파일 실패가 없음을 확인했고, 에디터 프로세스가 열린 상태로 남아 있음을 확인했다.
+
+## 2026-07-09 19:52:00 (소요시간: 00:03:47)
+
+- 페인트 UI 숫자 입력 박스가 진행도 막대처럼 보이지 않도록 SpinBox fill 색상을 완전 투명 처리했다.
+- 좌측 RGB/HSV/Rgh/Met 슬라이더는 유지하고, 숫자 영역은 어두운 입력 필드와 밝은 숫자/화살표 스타일만 남기도록 런타임 fallback 위젯과 WBP 생성 commandlet 양쪽에 같은 스타일을 적용했다.
+- `HideSeekEditor Win64 Development` 빌드가 성공했다.
+- `ChameleonPainterBuildTestContent` commandlet으로 `WBP_ChameleonColorPicker`를 재생성했으며, 결과는 0 errors 및 기존 procedural mesh degenerate triangle warning 2건이었다.
+- `HideSeek/HideSeek.uproject`를 Unreal Editor로 다시 실행했고, 최신 로그에서 Fatal, Error, ensure, 컴파일 실패가 없음을 확인했다.
+
+## 2026-07-09 19:59:36 (소요시간: 00:12:45)
+
+- 스포이드가 일반 메시에서 머티리얼 대표색만 읽어 같은 메시의 모든 지점이 같은 색으로 나오는 문제를 수정했다.
+- 일반 메시 샘플링 경로에서 base color 텍스쳐 파라미터를 찾고, 히트 UV 기준으로 텍스쳐 픽셀을 읽은 뒤 머티리얼 색상 파라미터 tint를 곱해 현재 base color에 가까운 색을 반환하도록 했다.
+- `FindCollisionUV`를 우선 사용하고, 실패하면 StaticMesh 렌더 데이터와 `FaceIndex`에서 barycentric UV를 직접 복원하는 fallback을 추가했다.
+- 테스트 표면 머티리얼의 텍스쳐 샘플을 `ChameleonBaseColorTexture` 파라미터로 재생성하고, 샘플용 텍스쳐를 CPU에서 읽을 수 있는 uncompressed 설정으로 저장하도록 commandlet을 갱신했다.
+- `DefaultEngine.ini`에 `bSupportUVFromHitResults=True`를 추가했다.
+- `HideSeekEditor Win64 Development` 빌드가 성공했다.
+- `ChameleonPainterBuildTestContent` commandlet은 0 errors 및 기존 procedural mesh degenerate triangle warning 2건으로 완료됐다.
+- `HideSeek/HideSeek.uproject`를 Unreal Editor로 다시 실행했고, 최신 로그에서 Fatal, Error, ensure, 컴파일 실패가 없음을 확인했다.

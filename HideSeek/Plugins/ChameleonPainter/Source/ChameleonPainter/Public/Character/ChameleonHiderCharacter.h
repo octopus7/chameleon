@@ -103,6 +103,9 @@ public:
 	TArray<FName> SampleColorParameterNames;
 
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Chameleon|Paint")
+	TArray<FName> SampleBaseColorTextureParameterNames;
+
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Chameleon|Paint")
 	EChameleonColorPickSource ColorPickSource = EChameleonColorPickSource::SurfaceData;
 
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Chameleon|UI", meta = (ClampMin = "24.0", ClampMax = "256.0"))
@@ -151,6 +154,8 @@ private:
 	void BindEnhancedInput(UInputComponent* PlayerInputComponent);
 	bool TraceFromView(float Distance, FHitResult& OutHit, bool bTraceSelfBody) const;
 	bool TrySampleColorFromHit(const FHitResult& Hit, FLinearColor& OutColor) const;
+	bool TryResolveHitUV(const FHitResult& Hit, FVector2D& OutUV) const;
+	bool TrySampleMaterialBaseColorTexture(const FHitResult& Hit, const UMaterialInterface& Material, FLinearColor& OutColor) const;
 	bool TrySampleSurfaceDataColor(FLinearColor& OutColor) const;
 	bool TrySampleFinalScreenColor(FLinearColor& OutColor) const;
 	bool TrySampleEyedropperColor(FLinearColor& OutColor) const;

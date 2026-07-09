@@ -199,6 +199,8 @@ TMap<FName, UTexture2D*> ImportTextures()
 		if (Texture)
 		{
 			Texture->SRGB = true;
+			Texture->CompressionSettings = TC_EditorIcon;
+			Texture->MipGenSettings = TMGS_NoMipmaps;
 			Texture->MarkPackageDirty();
 			Textures.Add(*AssetName, Texture);
 			SavePackageForObject(Texture);
@@ -436,13 +438,14 @@ UMaterial* CreateSurfaceMaterial(const FString& AssetName, UTexture2D* Texture, 
 
 	if (Texture)
 	{
-		UMaterialExpressionTextureSample* TextureSample = Cast<UMaterialExpressionTextureSample>(
-			UMaterialEditingLibrary::CreateMaterialExpression(Material, UMaterialExpressionTextureSample::StaticClass(), -640, -260));
+		UMaterialExpressionTextureSampleParameter2D* TextureSample = Cast<UMaterialExpressionTextureSampleParameter2D>(
+			UMaterialEditingLibrary::CreateMaterialExpression(Material, UMaterialExpressionTextureSampleParameter2D::StaticClass(), -640, -260));
 		UMaterialExpressionMultiply* Multiply = Cast<UMaterialExpressionMultiply>(
 			UMaterialEditingLibrary::CreateMaterialExpression(Material, UMaterialExpressionMultiply::StaticClass(), -300, -150));
 
 		if (TextureSample)
 		{
+			TextureSample->ParameterName = TEXT("ChameleonBaseColorTexture");
 			TextureSample->Texture = Texture;
 			TextureSample->AutoSetSampleType();
 		}
