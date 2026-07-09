@@ -4,7 +4,7 @@
 
 namespace
 {
-void AppendCirclePoints(TArray<FVector2D>& OutPoints, const FVector2D& Center, float Radius, int32 SegmentCount)
+void AppendBrushCursorCirclePoints(TArray<FVector2D>& OutPoints, const FVector2D& Center, float Radius, int32 SegmentCount)
 {
 	OutPoints.Reset();
 	for (int32 Index = 0; Index <= SegmentCount; ++Index)
@@ -49,7 +49,7 @@ int32 UChameleonBrushCursorWidget::NativePaint(
 	const FVector2D Center = LocalSize * 0.5f;
 
 	TArray<FVector2D> CirclePoints;
-	AppendCirclePoints(CirclePoints, Center, Radius, 96);
+	AppendBrushCursorCirclePoints(CirclePoints, Center, Radius, 96);
 	FSlateDrawElement::MakeLines(
 		OutDrawElements,
 		PaintedLayer + 1,

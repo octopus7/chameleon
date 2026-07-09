@@ -9,8 +9,6 @@ namespace
 {
 constexpr double FieldThreshold = 0.62;
 constexpr int32 MaxSkinInfluences = 4;
-constexpr int32 PaintTextureUvColumns = 6;
-constexpr int32 PaintTextureUvRows = 4;
 
 enum class EChameleonProceduralBoneSlot : uint8
 {
@@ -679,6 +677,63 @@ FVector ComputeBarycentricWeights(const FVector& Point, const FVector& A, const 
 	return FVector(U, V, W);
 }
 
+FVector ComputeBarycentricWeights2D(const FVector2D& Point, const FVector2D& A, const FVector2D& B, const FVector2D& C)
+{
+	const FVector2D V0 = B - A;
+	const FVector2D V1 = C - A;
+	const FVector2D V2 = Point - A;
+	const double D00 = FVector2D::DotProduct(V0, V0);
+	const double D01 = FVector2D::DotProduct(V0, V1);
+	const double D11 = FVector2D::DotProduct(V1, V1);
+	const double D20 = FVector2D::DotProduct(V2, V0);
+	const double D21 = FVector2D::DotProduct(V2, V1);
+	const double Denominator = D00 * D11 - D01 * D01;
+	if (FMath::IsNearlyZero(Denominator))
+	{
+		return FVector(-1.0, -1.0, -1.0);
+	}
+
+	const double V = (D11 * D20 - D01 * D21) / Denominator;
+	const double W = (D00 * D21 - D01 * D20) / Denominator;
+	const double U = 1.0 - V - W;
+	return FVector(U, V, W);
+}
+
+float SquaredDistanceToBox(const FVector& Point, const FBox& Box)
+{
+	const float Dx = Point.X < Box.Min.X ? static_cast<float>(Box.Min.X - Point.X) : (Point.X > Box.Max.X ? static_cast<float>(Point.X - Box.Max.X) : 0.0f);
+	const float Dy = Point.Y < Box.Min.Y ? static_cast<float>(Box.Min.Y - Point.Y) : (Point.Y > Box.Max.Y ? static_cast<float>(Point.Y - Box.Max.Y) : 0.0f);
+	const float Dz = Point.Z < Box.Min.Z ? static_cast<float>(Box.Min.Z - Point.Z) : (Point.Z > Box.Max.Z ? static_cast<float>(Point.Z - Box.Max.Z) : 0.0f);
+	return Dx * Dx + Dy * Dy + Dz * Dz;
+}
+
+float SquaredDistanceToSegment2D(const FVector2D& Point, const FVector2D& A, const FVector2D& B)
+{
+	const FVector2D Segment = B - A;
+	const double SegmentLengthSquared = Segment.SizeSquared();
+	if (SegmentLengthSquared <= UE_SMALL_NUMBER)
+	{
+		return FVector2D::DistSquared(Point, A);
+	}
+
+	const double T = FMath::Clamp(FVector2D::DotProduct(Point - A, Segment) / SegmentLengthSquared, 0.0, 1.0);
+	return FVector2D::DistSquared(Point, A + Segment * T);
+}
+
+float SquaredDistanceToTriangle2D(const FVector2D& Point, const FVector2D& A, const FVector2D& B, const FVector2D& C)
+{
+	const FVector Weights = ComputeBarycentricWeights2D(Point, A, B, C);
+	if (Weights.X >= 0.0 && Weights.Y >= 0.0 && Weights.Z >= 0.0)
+	{
+		return 0.0f;
+	}
+
+	return FMath::Min3(
+		SquaredDistanceToSegment2D(Point, A, B),
+		SquaredDistanceToSegment2D(Point, B, C),
+		SquaredDistanceToSegment2D(Point, C, A));
+}
+
 FColor ScalarToPaintPixel(float Value)
 {
 	const uint8 QuantizedValue = static_cast<uint8>(FMath::RoundToInt(FMath::Clamp(Value, 0.0f, 1.0f) * 255.0f));
@@ -865,6 +920,7 @@ void UChameleonMetaballBodyComponent::GenerateBody()
 	CachedTriangles.Reset();
 	CachedNormals.Reset();
 	CachedUV0.Reset();
+	CachedPaintTriangles.Reset();
 	CachedVertexColors.Reset();
 	CachedTangents.Reset();
 	AnimatedVertices.Reset();
@@ -910,6 +966,7 @@ void UChameleonMetaballBodyComponent::GenerateBody()
 		CachedTriangles.Add(AddVertex(Triangle.Points[1], UvIsland));
 		CachedTriangles.Add(AddVertex(Triangle.Points[2], UvIsland));
 	}
+	BuildPaintTriangleCache();
 
 	AnimatedVertices = CachedVertices;
 	AnimatedNormals = CachedNormals;
@@ -1001,7 +1058,10 @@ bool UChameleonMetaballBodyComponent::ApplyPaintStrokeWorld(FVector WorldPositio
 	Stroke.Roughness = Roughness;
 	Stroke.Metallic = Metallic;
 	Stroke.Strength = Strength;
-	return ApplyPaintStrokeLocal(Stroke);
+
+	const bool bAppliedLegacyStroke = ApplyPaintStrokeLocal(Stroke);
+	const bool bAppliedTextureStroke = ApplyMaterialTextureStrokeLocal(Stroke);
+	return bAppliedLegacyStroke || bAppliedTextureStroke;
 }
 
 bool UChameleonMetaballBodyComponent::ApplyPaintStrokeFromHit(const FHitResult& Hit, float RadiusCm, FLinearColor Color, float Strength, float Roughness, float Metallic)
@@ -1011,12 +1071,50 @@ bool UChameleonMetaballBodyComponent::ApplyPaintStrokeFromHit(const FHitResult& 
 		return false;
 	}
 
-	FVector2D PaintUv;
-	float UvRadiusPerCm = 0.0f;
-	const bool bCanPaintTexture = TryGetPaintUvFromHit(Hit, PaintUv, UvRadiusPerCm);
-	const bool bAppliedLegacyStroke = ApplyPaintStrokeWorld(Hit.ImpactPoint, Hit.ImpactNormal, RadiusCm, Color, Strength, Roughness, Metallic);
-	const bool bAppliedTextureStroke = bCanPaintTexture
-		&& ApplyMaterialTextureStroke(PaintUv, RadiusCm, UvRadiusPerCm, Color, Roughness, Metallic, Strength, 1.0f);
+	if (Hit.FaceIndex < 0 || CachedTriangles.IsEmpty() || CachedVertices.IsEmpty())
+	{
+		return ApplyPaintStrokeWorld(Hit.ImpactPoint, Hit.ImpactNormal, RadiusCm, Color, Strength, Roughness, Metallic);
+	}
+
+	const int32 TriangleStart = Hit.FaceIndex * 3;
+	if (!CachedTriangles.IsValidIndex(TriangleStart + 2))
+	{
+		return ApplyPaintStrokeWorld(Hit.ImpactPoint, Hit.ImpactNormal, RadiusCm, Color, Strength, Roughness, Metallic);
+	}
+
+	const int32 IndexA = CachedTriangles[TriangleStart];
+	const int32 IndexB = CachedTriangles[TriangleStart + 1];
+	const int32 IndexC = CachedTriangles[TriangleStart + 2];
+	const TArray<FVector>& VerticesToUse = AnimatedVertices.Num() == CachedVertices.Num() ? AnimatedVertices : CachedVertices;
+	if (!VerticesToUse.IsValidIndex(IndexA) || !VerticesToUse.IsValidIndex(IndexB) || !VerticesToUse.IsValidIndex(IndexC)
+		|| !CachedVertices.IsValidIndex(IndexA) || !CachedVertices.IsValidIndex(IndexB) || !CachedVertices.IsValidIndex(IndexC))
+	{
+		return ApplyPaintStrokeWorld(Hit.ImpactPoint, Hit.ImpactNormal, RadiusCm, Color, Strength, Roughness, Metallic);
+	}
+
+	const FVector AnimatedLocalPosition = GetComponentTransform().InverseTransformPosition(Hit.ImpactPoint);
+	const FVector Weights = ComputeBarycentricWeights(
+		AnimatedLocalPosition,
+		VerticesToUse[IndexA],
+		VerticesToUse[IndexB],
+		VerticesToUse[IndexC]);
+
+	FChameleonPaintStroke Stroke;
+	Stroke.LocalPositionCm = CachedVertices[IndexA] * Weights.X
+		+ CachedVertices[IndexB] * Weights.Y
+		+ CachedVertices[IndexC] * Weights.Z;
+	const FVector NormalA = CachedNormals.IsValidIndex(IndexA) ? CachedNormals[IndexA] : FVector::UpVector;
+	const FVector NormalB = CachedNormals.IsValidIndex(IndexB) ? CachedNormals[IndexB] : FVector::UpVector;
+	const FVector NormalC = CachedNormals.IsValidIndex(IndexC) ? CachedNormals[IndexC] : FVector::UpVector;
+	Stroke.LocalNormal = (NormalA * Weights.X + NormalB * Weights.Y + NormalC * Weights.Z).GetSafeNormal(UE_SMALL_NUMBER, FVector::UpVector);
+	Stroke.RadiusCm = RadiusCm;
+	Stroke.Color = Color;
+	Stroke.Roughness = Roughness;
+	Stroke.Metallic = Metallic;
+	Stroke.Strength = Strength;
+
+	const bool bAppliedLegacyStroke = ApplyPaintStrokeLocal(Stroke);
+	const bool bAppliedTextureStroke = ApplyMaterialTextureStrokeLocal(Stroke);
 	return bAppliedLegacyStroke || bAppliedTextureStroke;
 }
 
@@ -1185,128 +1283,139 @@ void UChameleonMetaballBodyComponent::UpdateMetallicPaintTexture()
 	UpdatePaintTexture(MetallicPaintTexture, MetallicPaintPixels, PaintTextureSize);
 }
 
-bool UChameleonMetaballBodyComponent::TryGetPaintUvFromHit(const FHitResult& Hit, FVector2D& OutUv, float& OutUvRadiusPerCm) const
+void UChameleonMetaballBodyComponent::BuildPaintTriangleCache()
 {
-	if (Hit.FaceIndex < 0 || CachedTriangles.IsEmpty() || CachedUV0.IsEmpty())
-	{
-		return false;
-	}
+	CachedPaintTriangles.Reset();
+	CachedPaintTriangles.Reserve(CachedTriangles.Num() / 3);
 
-	const int32 TriangleStart = Hit.FaceIndex * 3;
-	if (!CachedTriangles.IsValidIndex(TriangleStart + 2))
+	for (int32 TriangleStart = 0; TriangleStart + 2 < CachedTriangles.Num(); TriangleStart += 3)
 	{
-		return false;
-	}
-
-	const int32 IndexA = CachedTriangles[TriangleStart];
-	const int32 IndexB = CachedTriangles[TriangleStart + 1];
-	const int32 IndexC = CachedTriangles[TriangleStart + 2];
-	const TArray<FVector>& VerticesToUse = AnimatedVertices.Num() == CachedVertices.Num() ? AnimatedVertices : CachedVertices;
-	if (!VerticesToUse.IsValidIndex(IndexA) || !VerticesToUse.IsValidIndex(IndexB) || !VerticesToUse.IsValidIndex(IndexC)
-		|| !CachedUV0.IsValidIndex(IndexA) || !CachedUV0.IsValidIndex(IndexB) || !CachedUV0.IsValidIndex(IndexC))
-	{
-		return false;
-	}
-
-	const FVector LocalHitPosition = GetComponentTransform().InverseTransformPosition(Hit.ImpactPoint);
-	const FVector Weights = ComputeBarycentricWeights(
-		LocalHitPosition,
-		VerticesToUse[IndexA],
-		VerticesToUse[IndexB],
-		VerticesToUse[IndexC]);
-	OutUv = CachedUV0[IndexA] * static_cast<float>(Weights.X)
-		+ CachedUV0[IndexB] * static_cast<float>(Weights.Y)
-		+ CachedUV0[IndexC] * static_cast<float>(Weights.Z);
-	OutUv.X = FMath::Clamp(OutUv.X, 0.0f, 1.0f);
-	OutUv.Y = FMath::Clamp(OutUv.Y, 0.0f, 1.0f);
-
-	const auto EdgeUvPerCm = [&VerticesToUse, this](int32 FirstIndex, int32 SecondIndex)
-	{
-		const float MeshDistance = FVector::Dist(VerticesToUse[FirstIndex], VerticesToUse[SecondIndex]);
-		if (MeshDistance <= UE_SMALL_NUMBER)
+		const int32 IndexA = CachedTriangles[TriangleStart];
+		const int32 IndexB = CachedTriangles[TriangleStart + 1];
+		const int32 IndexC = CachedTriangles[TriangleStart + 2];
+		if (!CachedVertices.IsValidIndex(IndexA) || !CachedVertices.IsValidIndex(IndexB) || !CachedVertices.IsValidIndex(IndexC)
+			|| !CachedUV0.IsValidIndex(IndexA) || !CachedUV0.IsValidIndex(IndexB) || !CachedUV0.IsValidIndex(IndexC))
 		{
-			return 0.0f;
+			continue;
 		}
 
-		return static_cast<float>(FVector2D::Distance(CachedUV0[FirstIndex], CachedUV0[SecondIndex]) / MeshDistance);
-	};
-
-	const float EdgeAB = EdgeUvPerCm(IndexA, IndexB);
-	const float EdgeBC = EdgeUvPerCm(IndexB, IndexC);
-	const float EdgeCA = EdgeUvPerCm(IndexC, IndexA);
-	const float EdgeCount = (EdgeAB > 0.0f ? 1.0f : 0.0f) + (EdgeBC > 0.0f ? 1.0f : 0.0f) + (EdgeCA > 0.0f ? 1.0f : 0.0f);
-	OutUvRadiusPerCm = EdgeCount > 0.0f ? (EdgeAB + EdgeBC + EdgeCA) / EdgeCount : 1.0f / 128.0f;
-	return OutUvRadiusPerCm > 0.0f;
+		FChameleonPaintTriangleCache TriangleCache;
+		TriangleCache.Indices[0] = IndexA;
+		TriangleCache.Indices[1] = IndexB;
+		TriangleCache.Indices[2] = IndexC;
+		TriangleCache.RestPositions[0] = CachedVertices[IndexA];
+		TriangleCache.RestPositions[1] = CachedVertices[IndexB];
+		TriangleCache.RestPositions[2] = CachedVertices[IndexC];
+		TriangleCache.UVs[0] = CachedUV0[IndexA];
+		TriangleCache.UVs[1] = CachedUV0[IndexB];
+		TriangleCache.UVs[2] = CachedUV0[IndexC];
+		TriangleCache.RestBounds = FBox(ForceInit);
+		TriangleCache.RestBounds += TriangleCache.RestPositions[0];
+		TriangleCache.RestBounds += TriangleCache.RestPositions[1];
+		TriangleCache.RestBounds += TriangleCache.RestPositions[2];
+		TriangleCache.UvBounds = FBox2D(ForceInit);
+		TriangleCache.UvBounds += TriangleCache.UVs[0];
+		TriangleCache.UvBounds += TriangleCache.UVs[1];
+		TriangleCache.UvBounds += TriangleCache.UVs[2];
+		TriangleCache.RestNormal = FVector::CrossProduct(
+			TriangleCache.RestPositions[1] - TriangleCache.RestPositions[0],
+			TriangleCache.RestPositions[2] - TriangleCache.RestPositions[0]).GetSafeNormal(UE_SMALL_NUMBER, FVector::UpVector);
+		CachedPaintTriangles.Add(TriangleCache);
+	}
 }
 
-bool UChameleonMetaballBodyComponent::ApplyMaterialTextureStroke(FVector2D Uv, float RadiusCm, float UvRadiusPerCm, FLinearColor Color, float Roughness, float Metallic, float Strength, float Falloff)
+bool UChameleonMetaballBodyComponent::ApplyMaterialTextureStrokeLocal(const FChameleonPaintStroke& Stroke)
 {
 	EnsureBaseColorPaintTexture();
 	EnsureRoughnessPaintTexture();
 	EnsureMetallicPaintTexture();
 	if (!BaseColorPaintTexture || !RoughnessPaintTexture || !MetallicPaintTexture
 		|| BaseColorPaintPixels.IsEmpty() || RoughnessPaintPixels.IsEmpty() || MetallicPaintPixels.IsEmpty()
-		|| RadiusCm <= 0.0f)
+		|| Stroke.RadiusCm <= 0.0f)
 	{
 		return false;
 	}
 
+	if (CachedPaintTriangles.IsEmpty() && !CachedTriangles.IsEmpty())
+	{
+		BuildPaintTriangleCache();
+	}
+
+	FLinearColor Color = Stroke.Color;
 	Color.A = 1.0f;
-	const float ClampedRoughness = FMath::Clamp(Roughness, 0.0f, 1.0f);
-	const float ClampedMetallic = FMath::Clamp(Metallic, 0.0f, 1.0f);
-	const float PixelRadius = FMath::Clamp(
-		RadiusCm * UvRadiusPerCm * static_cast<float>(PaintTextureSize),
-		FMath::Max(MinimumPaintBrushRadiusPixels, 1.0f),
-		static_cast<float>(PaintTextureSize) * 0.25f);
-	const int32 CenterX = FMath::Clamp(FMath::RoundToInt(Uv.X * static_cast<float>(PaintTextureSize - 1)), 0, PaintTextureSize - 1);
-	const int32 CenterY = FMath::Clamp(FMath::RoundToInt(Uv.Y * static_cast<float>(PaintTextureSize - 1)), 0, PaintTextureSize - 1);
-	const int32 CellX = FMath::Clamp(FMath::FloorToInt(Uv.X * static_cast<float>(PaintTextureUvColumns)), 0, PaintTextureUvColumns - 1);
-	const int32 CellY = FMath::Clamp(FMath::FloorToInt(Uv.Y * static_cast<float>(PaintTextureUvRows)), 0, PaintTextureUvRows - 1);
-	const int32 CellMinX = FMath::FloorToInt((static_cast<float>(CellX) / static_cast<float>(PaintTextureUvColumns)) * PaintTextureSize);
-	const int32 CellMaxX = FMath::CeilToInt((static_cast<float>(CellX + 1) / static_cast<float>(PaintTextureUvColumns)) * PaintTextureSize) - 1;
-	const int32 CellMinY = FMath::FloorToInt((static_cast<float>(CellY) / static_cast<float>(PaintTextureUvRows)) * PaintTextureSize);
-	const int32 CellMaxY = FMath::CeilToInt((static_cast<float>(CellY + 1) / static_cast<float>(PaintTextureUvRows)) * PaintTextureSize) - 1;
-	const int32 MinX = FMath::Clamp(FMath::FloorToInt(static_cast<float>(CenterX) - PixelRadius), CellMinX, CellMaxX);
-	const int32 MaxX = FMath::Clamp(FMath::CeilToInt(static_cast<float>(CenterX) + PixelRadius), CellMinX, CellMaxX);
-	const int32 MinY = FMath::Clamp(FMath::FloorToInt(static_cast<float>(CenterY) - PixelRadius), CellMinY, CellMaxY);
-	const int32 MaxY = FMath::Clamp(FMath::CeilToInt(static_cast<float>(CenterY) + PixelRadius), CellMinY, CellMaxY);
-	const float ClampedStrength = FMath::Clamp(Strength, 0.0f, 1.0f);
-	const float ClampedFalloff = FMath::Max(Falloff, 0.1f);
+	const float ClampedRoughness = FMath::Clamp(Stroke.Roughness, 0.0f, 1.0f);
+	const float ClampedMetallic = FMath::Clamp(Stroke.Metallic, 0.0f, 1.0f);
+	const float ClampedStrength = FMath::Clamp(Stroke.Strength, 0.0f, 1.0f);
+	const float RadiusCm = Stroke.RadiusCm;
+	const float RadiusSquared = RadiusCm * RadiusCm;
+	const float TextureCoordinateScale = static_cast<float>(PaintTextureSize - 1);
+	const float TriangleDilationPixels = FMath::Max(PaintTextureTriangleDilationPixels, 0.0f);
+	const float TriangleDilationSquared = TriangleDilationPixels * TriangleDilationPixels;
 
 	bool bChangedAnyPixel = false;
-	for (int32 PixelY = MinY; PixelY <= MaxY; ++PixelY)
+	for (const FChameleonPaintTriangleCache& TriangleCache : CachedPaintTriangles)
 	{
-		for (int32 PixelX = MinX; PixelX <= MaxX; ++PixelX)
+		if (!TriangleCache.RestBounds.IsValid || !TriangleCache.UvBounds.bIsValid
+			|| SquaredDistanceToBox(Stroke.LocalPositionCm, TriangleCache.RestBounds) > RadiusSquared)
 		{
-			const float DistancePixels = FVector2D::Distance(FVector2D(static_cast<float>(PixelX), static_cast<float>(PixelY)), FVector2D(static_cast<float>(CenterX), static_cast<float>(CenterY)));
-			if (DistancePixels > PixelRadius)
+			continue;
+		}
+
+		const FVector ClosestPoint = FMath::ClosestPointOnTriangleToPoint(
+			Stroke.LocalPositionCm,
+			TriangleCache.RestPositions[0],
+			TriangleCache.RestPositions[1],
+			TriangleCache.RestPositions[2]);
+		if (FVector::DistSquared(ClosestPoint, Stroke.LocalPositionCm) > RadiusSquared)
+		{
+			continue;
+		}
+
+		const FVector2D UvPixelA = TriangleCache.UVs[0] * TextureCoordinateScale;
+		const FVector2D UvPixelB = TriangleCache.UVs[1] * TextureCoordinateScale;
+		const FVector2D UvPixelC = TriangleCache.UVs[2] * TextureCoordinateScale;
+		const float MinTriangleX = FMath::Min3(UvPixelA.X, UvPixelB.X, UvPixelC.X);
+		const float MaxTriangleX = FMath::Max3(UvPixelA.X, UvPixelB.X, UvPixelC.X);
+		const float MinTriangleY = FMath::Min3(UvPixelA.Y, UvPixelB.Y, UvPixelC.Y);
+		const float MaxTriangleY = FMath::Max3(UvPixelA.Y, UvPixelB.Y, UvPixelC.Y);
+		const int32 MinX = FMath::Clamp(FMath::FloorToInt(MinTriangleX - TriangleDilationPixels), 0, PaintTextureSize - 1);
+		const int32 MaxX = FMath::Clamp(FMath::CeilToInt(MaxTriangleX + TriangleDilationPixels), 0, PaintTextureSize - 1);
+		const int32 MinY = FMath::Clamp(FMath::FloorToInt(MinTriangleY - TriangleDilationPixels), 0, PaintTextureSize - 1);
+		const int32 MaxY = FMath::Clamp(FMath::CeilToInt(MaxTriangleY + TriangleDilationPixels), 0, PaintTextureSize - 1);
+
+		for (int32 PixelY = MinY; PixelY <= MaxY; ++PixelY)
+		{
+			for (int32 PixelX = MinX; PixelX <= MaxX; ++PixelX)
 			{
-				continue;
+				const FVector2D PixelPoint(static_cast<float>(PixelX) + 0.5f, static_cast<float>(PixelY) + 0.5f);
+				if (SquaredDistanceToTriangle2D(PixelPoint, UvPixelA, UvPixelB, UvPixelC) > TriangleDilationSquared)
+				{
+					continue;
+				}
+
+				const float Alpha = ClampedStrength;
+				const int32 PixelIndex = PixelY * PaintTextureSize + PixelX;
+				if (!BaseColorPaintPixels.IsValidIndex(PixelIndex)
+					|| !RoughnessPaintPixels.IsValidIndex(PixelIndex)
+					|| !MetallicPaintPixels.IsValidIndex(PixelIndex)
+					|| Alpha <= 0.0f)
+				{
+					continue;
+				}
+
+				FLinearColor ExistingColor = FLinearColor::FromSRGBColor(BaseColorPaintPixels[PixelIndex]);
+				ExistingColor.A = 1.0f;
+				FLinearColor PaintedColor = FLinearColor::LerpUsingHSV(ExistingColor, Color, Alpha);
+				PaintedColor.A = 1.0f;
+				BaseColorPaintPixels[PixelIndex] = PaintedColor.ToFColorSRGB();
+
+				const float ExistingRoughness = PaintPixelToScalar(RoughnessPaintPixels[PixelIndex]);
+				RoughnessPaintPixels[PixelIndex] = ScalarToPaintPixel(FMath::Lerp(ExistingRoughness, ClampedRoughness, Alpha));
+
+				const float ExistingMetallic = PaintPixelToScalar(MetallicPaintPixels[PixelIndex]);
+				MetallicPaintPixels[PixelIndex] = ScalarToPaintPixel(FMath::Lerp(ExistingMetallic, ClampedMetallic, Alpha));
+				bChangedAnyPixel = true;
 			}
-
-			const float NormalizedDistance = PixelRadius > UE_SMALL_NUMBER ? DistancePixels / PixelRadius : 0.0f;
-			const float Alpha = FMath::Clamp(ClampedStrength * FMath::Pow(1.0f - NormalizedDistance, ClampedFalloff), 0.0f, 1.0f);
-			const int32 PixelIndex = PixelY * PaintTextureSize + PixelX;
-			if (!BaseColorPaintPixels.IsValidIndex(PixelIndex)
-				|| !RoughnessPaintPixels.IsValidIndex(PixelIndex)
-				|| !MetallicPaintPixels.IsValidIndex(PixelIndex)
-				|| Alpha <= 0.0f)
-			{
-				continue;
-			}
-
-			FLinearColor ExistingColor = FLinearColor::FromSRGBColor(BaseColorPaintPixels[PixelIndex]);
-			ExistingColor.A = 1.0f;
-			FLinearColor PaintedColor = FLinearColor::LerpUsingHSV(ExistingColor, Color, Alpha);
-			PaintedColor.A = 1.0f;
-			BaseColorPaintPixels[PixelIndex] = PaintedColor.ToFColorSRGB();
-
-			const float ExistingRoughness = PaintPixelToScalar(RoughnessPaintPixels[PixelIndex]);
-			RoughnessPaintPixels[PixelIndex] = ScalarToPaintPixel(FMath::Lerp(ExistingRoughness, ClampedRoughness, Alpha));
-
-			const float ExistingMetallic = PaintPixelToScalar(MetallicPaintPixels[PixelIndex]);
-			MetallicPaintPixels[PixelIndex] = ScalarToPaintPixel(FMath::Lerp(ExistingMetallic, ClampedMetallic, Alpha));
-			bChangedAnyPixel = true;
 		}
 	}
 
@@ -1634,25 +1743,52 @@ bool UChameleonMetaballBodyComponent::TryResolveAnimatedLocalPositionToRest(FVec
 		return false;
 	}
 
-	int32 BestVertexIndex = INDEX_NONE;
+	FVector BestWeights = FVector(1.0, 0.0, 0.0);
+	int32 BestTriangleIndices[3] = { INDEX_NONE, INDEX_NONE, INDEX_NONE };
 	double BestDistanceSquared = TNumericLimits<double>::Max();
-	for (int32 VertexIndex = 0; VertexIndex < AnimatedVertices.Num(); ++VertexIndex)
+	for (int32 TriangleStart = 0; TriangleStart + 2 < CachedTriangles.Num(); TriangleStart += 3)
 	{
-		const double DistanceSquared = FVector::DistSquared(AnimatedVertices[VertexIndex], AnimatedLocalPosition);
+		const int32 IndexA = CachedTriangles[TriangleStart];
+		const int32 IndexB = CachedTriangles[TriangleStart + 1];
+		const int32 IndexC = CachedTriangles[TriangleStart + 2];
+		if (!AnimatedVertices.IsValidIndex(IndexA) || !AnimatedVertices.IsValidIndex(IndexB) || !AnimatedVertices.IsValidIndex(IndexC)
+			|| !CachedVertices.IsValidIndex(IndexA) || !CachedVertices.IsValidIndex(IndexB) || !CachedVertices.IsValidIndex(IndexC))
+		{
+			continue;
+		}
+
+		const FVector ClosestPoint = FMath::ClosestPointOnTriangleToPoint(
+			AnimatedLocalPosition,
+			AnimatedVertices[IndexA],
+			AnimatedVertices[IndexB],
+			AnimatedVertices[IndexC]);
+		const double DistanceSquared = FVector::DistSquared(ClosestPoint, AnimatedLocalPosition);
 		if (DistanceSquared < BestDistanceSquared)
 		{
 			BestDistanceSquared = DistanceSquared;
-			BestVertexIndex = VertexIndex;
+			BestWeights = ComputeBarycentricWeights(
+				ClosestPoint,
+				AnimatedVertices[IndexA],
+				AnimatedVertices[IndexB],
+				AnimatedVertices[IndexC]);
+			BestTriangleIndices[0] = IndexA;
+			BestTriangleIndices[1] = IndexB;
+			BestTriangleIndices[2] = IndexC;
 		}
 	}
 
-	if (BestVertexIndex == INDEX_NONE)
+	if (BestTriangleIndices[0] == INDEX_NONE)
 	{
 		return false;
 	}
 
-	OutRestPosition = CachedVertices[BestVertexIndex];
-	OutRestNormal = CachedNormals.IsValidIndex(BestVertexIndex) ? CachedNormals[BestVertexIndex] : FVector::UpVector;
+	OutRestPosition = CachedVertices[BestTriangleIndices[0]] * BestWeights.X
+		+ CachedVertices[BestTriangleIndices[1]] * BestWeights.Y
+		+ CachedVertices[BestTriangleIndices[2]] * BestWeights.Z;
+	const FVector NormalA = CachedNormals.IsValidIndex(BestTriangleIndices[0]) ? CachedNormals[BestTriangleIndices[0]] : FVector::UpVector;
+	const FVector NormalB = CachedNormals.IsValidIndex(BestTriangleIndices[1]) ? CachedNormals[BestTriangleIndices[1]] : FVector::UpVector;
+	const FVector NormalC = CachedNormals.IsValidIndex(BestTriangleIndices[2]) ? CachedNormals[BestTriangleIndices[2]] : FVector::UpVector;
+	OutRestNormal = (NormalA * BestWeights.X + NormalB * BestWeights.Y + NormalC * BestWeights.Z).GetSafeNormal(UE_SMALL_NUMBER, FVector::UpVector);
 	return true;
 }
 

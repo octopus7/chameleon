@@ -290,3 +290,33 @@
 - `HideSeekEditor Win64 Development` 빌드가 성공했다.
 - `ChameleonPainterBuildTestContent` 커맨드렛을 실행해 새 입력 액션, 매핑 컨텍스트, 브러시 커서 WBP, 캐릭터 BP 기본값을 저장했고 결과는 0 errors였다. 남은 경고는 파일 이동 재시도 후 복구와 기존 procedural mesh degenerate triangle warning이었다.
 - `HideSeek/HideSeek.uproject`를 Unreal Editor로 다시 실행했으며, 최신 로그에서 Fatal, ensure, 위젯 컴파일 실패가 없음을 확인했다.
+
+## 2026-07-09 15:21:00 (소요시간: 00:06:52)
+
+- 브러시 원 안인데도 일부 영역이 칠해지지 않는 문제를 UV 섬/atlas 셀 경계에서 발생하는 단일 UV 스탬프 한계로 판단하고 페인트 적용 방식을 수정했다.
+- 기존 `Hit.FaceIndex`의 한 UV 좌표 주변만 칠하던 경로를 제거하고, 브러시 중심의 rest-local 위치와 반경을 기준으로 후보 삼각형을 찾도록 변경했다.
+- 절차 메시 생성 시 각 삼각형의 rest 위치, UV, rest AABB, UV AABB를 `FChameleonPaintTriangleCache`로 캐싱하도록 추가했다.
+- 페인트 시 화면 픽셀을 순회하지 않고 캐시된 후보 삼각형만 AABB로 거른 뒤, 해당 삼각형의 UV 영역 픽셀만 역래스터라이즈하도록 구현했다.
+- UV 섬이 끊겨 있어도 월드 브러시 반경 안에 들어온 모든 삼각형이 각자의 UV 섬에 칠해지도록 했다.
+- 브러시 내부 픽셀은 기존 거리 falloff 대신 현재 stroke strength로 온전히 칠해지도록 텍스처 알파 처리를 변경했다.
+- UE unity 빌드에서 `ChameleonHSVColorWheelWidget.cpp`와 `ChameleonBrushCursorWidget.cpp`의 anonymous namespace 함수명이 충돌하던 문제를 브러시 커서 함수명 고유화로 해결했다.
+- `HideSeekEditor Win64 Development` 빌드가 성공했다.
+- `HideSeek/HideSeek.uproject`를 Unreal Editor로 다시 실행했으며, 최신 로그에서 Fatal, ensure, 컴파일 실패가 없음을 확인했다.
+
+## 2026-07-09 15:29:30 (소요시간: 00:04:09)
+
+- 브러시 원 안의 앞부분이 거의 칠해지지 않고 일부만 칠해지는 문제를 추가로 수정했다.
+- `ApplyPaintStrokeFromHit()`가 animated hit 위치를 가장 가까운 정점 하나로 rest 위치에 스냅하던 경로를 우회하고, `Hit.FaceIndex` 삼각형의 barycentric weight로 정확한 rest-local 히트 위치와 normal을 계산하도록 했다.
+- 텍스처 페인트 역래스터라이즈에서 픽셀마다 UV 기반 rest 위치를 역산해 거리로 탈락시키던 보수적인 판정을 제거했다.
+- 브러시 중심과 삼각형 사이의 최단 거리가 브러시 반경 안이면 해당 삼각형의 UV 내부 픽셀을 전부 칠하도록 변경해, 앞면/섬 경계에서 극히 일부만 칠해지는 문제를 완화했다.
+- `HideSeekEditor Win64 Development` 빌드가 성공했다.
+- `HideSeek/HideSeek.uproject`를 Unreal Editor로 다시 실행했으며, 최신 로그에서 Fatal, ensure, 컴파일 실패가 없음을 확인했다.
+
+## 2026-07-09 15:34:00 (소요시간: 00:07:45)
+
+- 브러시 원 안에서도 극히 일부 텍스처 픽셀만 칠해지는 문제를 추가로 수정했다.
+- UV 삼각형이 얇거나 작은 경우 픽셀 중심이 삼각형 내부에 정확히 들어와야만 칠해지던 판정을 완화하고, `PaintTextureTriangleDilationPixels`를 추가해 UV 삼각형 주변 픽셀까지 함께 래스터라이즈하도록 했다.
+- 텍스처 페인팅 후보 삼각형은 화면 전체 픽셀 레이캐스트가 아니라 기존 cached triangle 목록에서 rest-space AABB와 closest-point 거리로 선별하도록 유지했다.
+- `Hit.FaceIndex`를 사용할 수 없는 경로에서 animated hit 위치를 가장 가까운 정점 하나로 스냅하던 fallback을 가장 가까운 animated triangle 위 점과 barycentric weight 기반 rest 위치 변환으로 바꿨다.
+- `HideSeekEditor Win64 Development` 빌드가 성공했다.
+- `HideSeek/HideSeek.uproject`를 Unreal Editor로 다시 실행했고, 최신 로그에서 Fatal, ensure, 컴파일 실패가 없음을 확인했다.

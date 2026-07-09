@@ -64,6 +64,16 @@ struct FChameleonVertexSkinWeights
 	float Weights[4] = { 1.0f, 0.0f, 0.0f, 0.0f };
 };
 
+struct FChameleonPaintTriangleCache
+{
+	int32 Indices[3] = { INDEX_NONE, INDEX_NONE, INDEX_NONE };
+	FVector RestPositions[3] = { FVector::ZeroVector, FVector::ZeroVector, FVector::ZeroVector };
+	FVector2D UVs[3] = { FVector2D::ZeroVector, FVector2D::ZeroVector, FVector2D::ZeroVector };
+	FBox RestBounds = FBox(ForceInit);
+	FBox2D UvBounds = FBox2D(ForceInit);
+	FVector RestNormal = FVector::UpVector;
+};
+
 UCLASS(ClassGroup = (Chameleon), meta = (BlueprintSpawnableComponent))
 class CHAMELEONPAINTER_API UChameleonMetaballBodyComponent : public UProceduralMeshComponent
 {
@@ -139,6 +149,9 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Chameleon|Paint|Texture", meta = (ClampMin = "1.0", UIMin = "1.0", UIMax = "16.0"))
 	float MinimumPaintBrushRadiusPixels = 2.0f;
 
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Chameleon|Paint|Texture", meta = (ClampMin = "0.0", UIMin = "0.0", UIMax = "12.0"))
+	float PaintTextureTriangleDilationPixels = 4.0f;
+
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Chameleon|Paint|Texture")
 	TArray<FName> BaseColorTextureParameterNames;
 
@@ -186,8 +199,8 @@ private:
 	void UpdateBaseColorPaintTexture();
 	void UpdateRoughnessPaintTexture();
 	void UpdateMetallicPaintTexture();
-	bool TryGetPaintUvFromHit(const FHitResult& Hit, FVector2D& OutUv, float& OutUvRadiusPerCm) const;
-	bool ApplyMaterialTextureStroke(FVector2D Uv, float RadiusCm, float UvRadiusPerCm, FLinearColor Color, float Roughness, float Metallic, float Strength, float Falloff);
+	void BuildPaintTriangleCache();
+	bool ApplyMaterialTextureStrokeLocal(const FChameleonPaintStroke& Stroke);
 	void RebuildVertexColors();
 	void UpdatePaintedMeshSection();
 	void BuildProceduralSkeleton();
@@ -201,6 +214,7 @@ private:
 	TArray<int32> CachedTriangles;
 	TArray<FVector> CachedNormals;
 	TArray<FVector2D> CachedUV0;
+	TArray<FChameleonPaintTriangleCache> CachedPaintTriangles;
 	TArray<FLinearColor> CachedVertexColors;
 	TArray<FProcMeshTangent> CachedTangents;
 	TArray<FVector> AnimatedVertices;
