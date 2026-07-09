@@ -365,3 +365,10 @@
 - 색상 수치 `USpinBox` 입력칸은 어두운 배경, hover/active 어두운 상태색, 밝은 숫자/화살표 색으로 스타일링되도록 C++ 런타임 fallback과 WBP 생성 커맨드렛 양쪽에 적용했다.
 - `HideSeekEditor Win64 Development` 빌드가 성공했고, `ChameleonPainterBuildTestContent` 커맨드렛은 0 errors 및 기존 procedural mesh degenerate triangle warning 2건으로 완료됐다.
 - `HideSeek/HideSeek.uproject`를 Unreal Editor로 다시 실행했고, 최신 로그에서 Fatal, Error, ensure, 컴파일 실패가 없음을 확인했다.
+
+## 2026-07-09 19:41:00 (소요시간: 00:06:05)
+
+- 아이드로퍼 hover 미리보기 원이 비어 보이던 문제를 다시 수정했다.
+- Slate custom vertex circle은 리소스 핸들 조건 때문에 fill draw가 스킵될 수 있어 제거하고, `FSlateRoundedBoxBrush`를 `MakeBox` tint 색상과 함께 쓰는 원형 fill 경로로 변경했다.
+- `HideSeekEditor Win64 Development` 빌드가 성공했고, `HideSeek/HideSeek.uproject`를 Unreal Editor로 다시 실행했다.
+- 최신 로그에서 Fatal, Error, ensure, 컴파일 실패가 없음을 확인했고, 에디터 프로세스가 열린 상태로 남아 있음을 확인했다.

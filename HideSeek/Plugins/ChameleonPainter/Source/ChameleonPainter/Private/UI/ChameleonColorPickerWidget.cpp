@@ -27,7 +27,7 @@ const FLinearColor MutedTrackColor(0.34f, 0.34f, 0.34f, 1.0f);
 const FLinearColor ValueBoxBackgroundColor(0.055f, 0.06f, 0.068f, 1.0f);
 const FLinearColor ValueBoxHoverColor(0.075f, 0.085f, 0.098f, 1.0f);
 const FLinearColor ValueBoxActiveColor(0.095f, 0.11f, 0.13f, 1.0f);
-const FLinearColor ValueBoxFillColor(0.14f, 0.17f, 0.2f, 1.0f);
+const FLinearColor ValueBoxFillColor(0.0f, 0.0f, 0.0f, 0.0f);
 const FLinearColor ValueBoxTextColor(0.94f, 0.96f, 1.0f, 1.0f);
 
 float ClampUnit(float Value)
@@ -91,8 +91,8 @@ void ApplyValueBoxStyle(USpinBox* ValueBox)
 	SpinBoxStyle.HoveredBackgroundBrush.TintColor = FSlateColor(ValueBoxHoverColor);
 	SpinBoxStyle.ActiveBackgroundBrush.TintColor = FSlateColor(ValueBoxActiveColor);
 	SpinBoxStyle.InactiveFillBrush.TintColor = FSlateColor(ValueBoxFillColor);
-	SpinBoxStyle.HoveredFillBrush.TintColor = FSlateColor(ValueBoxFillColor.CopyWithNewOpacity(0.92f));
-	SpinBoxStyle.ActiveFillBrush.TintColor = FSlateColor(ValueBoxFillColor.CopyWithNewOpacity(0.95f));
+	SpinBoxStyle.HoveredFillBrush.TintColor = FSlateColor(ValueBoxFillColor);
+	SpinBoxStyle.ActiveFillBrush.TintColor = FSlateColor(ValueBoxFillColor);
 	SpinBoxStyle.ArrowsImage.TintColor = FSlateColor(ValueBoxTextColor.CopyWithNewOpacity(0.78f));
 	SpinBoxStyle.SetForegroundColor(FSlateColor(ValueBoxTextColor));
 	SpinBoxStyle.SetTextPadding(FMargin(4.0f, 1.0f));

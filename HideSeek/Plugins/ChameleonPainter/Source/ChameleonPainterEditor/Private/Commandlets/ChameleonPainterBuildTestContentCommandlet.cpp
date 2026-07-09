@@ -663,7 +663,7 @@ void ApplyColorPickerValueBoxStyle(USpinBox* SpinBox)
 	const FLinearColor BackgroundColor(0.055f, 0.06f, 0.068f, 1.0f);
 	const FLinearColor HoverColor(0.075f, 0.085f, 0.098f, 1.0f);
 	const FLinearColor ActiveColor(0.095f, 0.11f, 0.13f, 1.0f);
-	const FLinearColor FillColor(0.14f, 0.17f, 0.2f, 1.0f);
+	const FLinearColor FillColor(0.0f, 0.0f, 0.0f, 0.0f);
 	const FLinearColor TextColor(0.94f, 0.96f, 1.0f, 1.0f);
 
 	FSpinBoxStyle SpinBoxStyle = SpinBox->GetWidgetStyle();
@@ -671,8 +671,8 @@ void ApplyColorPickerValueBoxStyle(USpinBox* SpinBox)
 	SpinBoxStyle.HoveredBackgroundBrush.TintColor = FSlateColor(HoverColor);
 	SpinBoxStyle.ActiveBackgroundBrush.TintColor = FSlateColor(ActiveColor);
 	SpinBoxStyle.InactiveFillBrush.TintColor = FSlateColor(FillColor);
-	SpinBoxStyle.HoveredFillBrush.TintColor = FSlateColor(FillColor.CopyWithNewOpacity(0.92f));
-	SpinBoxStyle.ActiveFillBrush.TintColor = FSlateColor(FillColor.CopyWithNewOpacity(0.95f));
+	SpinBoxStyle.HoveredFillBrush.TintColor = FSlateColor(FillColor);
+	SpinBoxStyle.ActiveFillBrush.TintColor = FSlateColor(FillColor);
 	SpinBoxStyle.ArrowsImage.TintColor = FSlateColor(TextColor.CopyWithNewOpacity(0.78f));
 	SpinBoxStyle.SetForegroundColor(FSlateColor(TextColor));
 	SpinBoxStyle.SetTextPadding(FMargin(4.0f, 1.0f));
