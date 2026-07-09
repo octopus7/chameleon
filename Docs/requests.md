@@ -147,3 +147,28 @@
 - `AChameleonHiderCharacter`에 `BrushCursorWidgetClass`를 추가하고, 컬러피커 표시 중 `PlayerController->SetMouseCursorWidget`으로 붓 커서 WBP를 등록하도록 구현했다.
 - `BP_ChameleonHiderCharacter`에 컬러피커 WBP와 붓 커서 WBP 클래스를 커맨드렛에서 연결했다.
 - 검증으로 `HideSeekEditor Win64 Development` 빌드가 성공했고, `ChameleonPainterBuildTestContent` 커맨드렛이 0 errors, 기존 metaball degenerate triangle 경고 2건으로 성공했다.
+
+## 2026-07-09 12:51:32 (소요시간: 00:06:00)
+
+- 컬러피커는 보이지만 붓 커서가 보이지 않는 문제를 처리했다.
+- 기존 `PlayerController->SetMouseCursorWidget()` 등록 방식이 PIE/Slate viewport 조합에서 실제 렌더링으로 이어지지 않을 수 있어, 붓 커서를 별도 UMG overlay 위젯으로 `AddToViewport(1000)`에 직접 올리는 방식으로 변경했다.
+- `AChameleonHiderCharacter`에 tick을 추가하고, 컬러피커가 열린 동안에만 actor tick을 켜서 `GetMousePosition()` 기준으로 `WBP_ChameleonBrushCursor` 위치를 매 프레임 갱신하도록 구현했다.
+- 붓 커서 overlay는 `HitTestInvisible`로 표시해 컬러피커 슬라이더/버튼 입력을 가로막지 않도록 했다.
+- 컬러피커가 닫히면 붓 커서 overlay를 `Collapsed`로 숨기고 actor tick을 다시 끄도록 했다.
+- 검증으로 `HideSeekEditor Win64 Development` 빌드가 성공했다.
+## 2026-07-09 12:48:10 (소요시간: 00:04:46)
+
+- 캐릭터 페인트를 이후 Base Color 맵 기반으로 전환할 수 있도록, 메타볼 캐릭터의 UV 언랩을 먼저 처리했다.
+- `UChameleonMetaballBodyComponent` 런타임 메시 생성에서 기존 원통형 임시 UV를 제거하고, 머리/몸통/팔/다리 파트별 UV 섬을 6x4 아틀라스에 패킹하도록 바꿨다.
+- UV seam이 필요한 부분에서 같은 위치의 정점도 다른 UV 섬이면 분리되도록 정점 병합 키에 UV 섬 ID를 포함했다.
+- `generate-hider-metaball-body.mjs`에도 같은 UV 아틀라스 규칙을 적용하고 `SM_HiderMetaball_Body.obj`를 재생성해 `vt` 좌표와 `v/vt/vn` face 인덱스를 출력하도록 했다.
+- OBJ 검증 결과 `v=29889`, `vt=29889`, `vn=29889`, `f=54952`로 정점/UV/노멀 인덱스 수가 일치했다.
+- 일반 UE 빌드는 열린 Unreal Editor의 Live Coding 세션 때문에 차단됐고, `Build.bat HideSeekEditor Win64 Development -Project=D:\github\chameleon\HideSeek\HideSeek.uproject -WaitMutex -FromMsBuild -LiveCoding` 빌드로 `ChameleonMetaballBodyComponent.cpp` 컴파일 성공을 확인했다.
+
+## 2026-07-09 12:54:48 (소요시간: 00:03:20)
+
+- 붓 커서는 보이지만 커서로 캐릭터를 드래그해도 칠해지지 않고 카메라만 움직이는 문제를 처리했다.
+- 기존 paint trace가 마우스 커서 위치가 아니라 카메라 중앙/view 방향으로 나가고 있어, 컬러피커 모드에서는 `PlayerController->DeprojectMousePositionToWorld()`로 마우스 커서 위치 기준 ray를 만들도록 수정했다.
+- 컬러피커가 열린 동안 `Look()` 입력을 무시해 마우스 드래그가 카메라 회전으로 들어가지 않도록 했다.
+- 기존 `TraceFromView` 호출부는 유지하되, 내부에서 컬러피커 표시 상태에 따라 view-center trace와 cursor trace를 전환하도록 정리했다.
+- 검증으로 `HideSeekEditor Win64 Development` 빌드가 성공했다.

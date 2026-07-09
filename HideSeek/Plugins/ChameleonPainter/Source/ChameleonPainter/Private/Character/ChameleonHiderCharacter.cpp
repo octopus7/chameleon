@@ -22,7 +22,8 @@
 AChameleonHiderCharacter::AChameleonHiderCharacter(const FObjectInitializer& ObjectInitializer)
 	: Super(ObjectInitializer)
 {
-	PrimaryActorTick.bCanEverTick = false;
+	PrimaryActorTick.bCanEverTick = true;
+	PrimaryActorTick.bStartWithTickEnabled = false;
 	bUseControllerRotationPitch = false;
 	bUseControllerRotationYaw = false;
 	bUseControllerRotationRoll = false;
@@ -68,6 +69,16 @@ void AChameleonHiderCharacter::BeginPlay()
 	SetColorPickerVisible(false);
 }
 
+void AChameleonHiderCharacter::Tick(float DeltaSeconds)
+{
+	Super::Tick(DeltaSeconds);
+
+	if (bColorPickerVisible)
+	{
+		UpdateBrushCursorPosition();
+	}
+}
+
 void AChameleonHiderCharacter::SetupPlayerInputComponent(UInputComponent* PlayerInputComponent)
 {
 	Super::SetupPlayerInputComponent(PlayerInputComponent);
@@ -110,6 +121,11 @@ void AChameleonHiderCharacter::Move(const FInputActionValue& Value)
 
 void AChameleonHiderCharacter::Look(const FInputActionValue& Value)
 {
+	if (bColorPickerVisible)
+	{
+		return;
+	}
+
 	const FVector2D Axis = Value.Get<FVector2D>();
 	AddControllerYawInput(Axis.X);
 	AddControllerPitchInput(-Axis.Y);
@@ -241,9 +257,22 @@ bool AChameleonHiderCharacter::TraceFromView(float Distance, FHitResult& OutHit,
 	}
 
 	FVector ViewLocation;
-	FRotator ViewRotation;
-	PlayerController->GetPlayerViewPoint(ViewLocation, ViewRotation);
-	const FVector End = ViewLocation + ViewRotation.Vector() * Distance;
+	FVector ViewDirection;
+	if (bColorPickerVisible)
+	{
+		if (!PlayerController->DeprojectMousePositionToWorld(ViewLocation, ViewDirection))
+		{
+			return false;
+		}
+	}
+	else
+	{
+		FRotator ViewRotation;
+		PlayerController->GetPlayerViewPoint(ViewLocation, ViewRotation);
+		ViewDirection = ViewRotation.Vector();
+	}
+
+	const FVector End = ViewLocation + ViewDirection * Distance;
 
 	FCollisionQueryParams QueryParams(SCENE_QUERY_STAT(ChameleonPainterTrace), true);
 	QueryParams.bReturnFaceIndex = true;
@@ -337,6 +366,34 @@ void AChameleonHiderCharacter::EnsureBrushCursor()
 	}
 
 	BrushCursorWidget = CreateWidget<UUserWidget>(PlayerController, BrushCursorWidgetClass);
+	if (BrushCursorWidget)
+	{
+		BrushCursorWidget->AddToViewport(1000);
+		BrushCursorWidget->SetAlignmentInViewport(FVector2D::ZeroVector);
+		BrushCursorWidget->SetDesiredSizeInViewport(FVector2D(64.0f, 64.0f));
+		BrushCursorWidget->SetVisibility(ESlateVisibility::Collapsed);
+	}
+}
+
+void AChameleonHiderCharacter::UpdateBrushCursorPosition()
+{
+	if (!BrushCursorWidget)
+	{
+		return;
+	}
+
+	const APlayerController* PlayerController = Cast<APlayerController>(GetController());
+	if (!PlayerController)
+	{
+		return;
+	}
+
+	float MouseX = 0.0f;
+	float MouseY = 0.0f;
+	if (PlayerController->GetMousePosition(MouseX, MouseY))
+	{
+		BrushCursorWidget->SetPositionInViewport(FVector2D(MouseX - 6.0f, MouseY - 6.0f), false);
+	}
 }
 
 void AChameleonHiderCharacter::SetColorPickerVisible(bool bVisible)
@@ -357,9 +414,10 @@ void AChameleonHiderCharacter::SetColorPickerVisible(bool bVisible)
 			EnsureBrushCursor();
 			if (BrushCursorWidget)
 			{
-				PlayerController->CurrentMouseCursor = EMouseCursor::Default;
-				PlayerController->SetMouseCursorWidget(EMouseCursor::Default, BrushCursorWidget);
+				BrushCursorWidget->SetVisibility(ESlateVisibility::HitTestInvisible);
+				UpdateBrushCursorPosition();
 			}
+			SetActorTickEnabled(true);
 
 			FInputModeGameAndUI InputMode;
 			InputMode.SetHideCursorDuringCapture(false);
@@ -368,7 +426,11 @@ void AChameleonHiderCharacter::SetColorPickerVisible(bool bVisible)
 		}
 		else
 		{
-			PlayerController->SetMouseCursorWidget(EMouseCursor::Default, nullptr);
+			if (BrushCursorWidget)
+			{
+				BrushCursorWidget->SetVisibility(ESlateVisibility::Collapsed);
+			}
+			SetActorTickEnabled(false);
 			FInputModeGameOnly InputMode;
 			PlayerController->SetInputMode(InputMode);
 		}

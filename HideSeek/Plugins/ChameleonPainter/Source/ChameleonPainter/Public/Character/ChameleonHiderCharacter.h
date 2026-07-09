@@ -22,6 +22,7 @@ public:
 	AChameleonHiderCharacter(const FObjectInitializer& ObjectInitializer = FObjectInitializer::Get());
 
 	virtual void BeginPlay() override;
+	virtual void Tick(float DeltaSeconds) override;
 	virtual void SetupPlayerInputComponent(UInputComponent* PlayerInputComponent) override;
 	virtual void PossessedBy(AController* NewController) override;
 	virtual void OnRep_Controller() override;
@@ -87,6 +88,7 @@ private:
 	bool TrySampleColorFromHit(const FHitResult& Hit, FLinearColor& OutColor) const;
 	void EnsureColorPicker();
 	void EnsureBrushCursor();
+	void UpdateBrushCursorPosition();
 	void SetColorPickerVisible(bool bVisible);
 
 	UPROPERTY(Transient)
