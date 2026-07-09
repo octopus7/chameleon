@@ -401,7 +401,7 @@ void AChameleonHiderCharacter::EnsureColorPicker()
 		ColorPickerWidget->AddToViewport(100);
 		ColorPickerWidget->SetAlignmentInViewport(FVector2D::ZeroVector);
 		ColorPickerWidget->SetPositionInViewport(FVector2D(24.0f, 24.0f), false);
-		ColorPickerWidget->SetDesiredSizeInViewport(FVector2D(400.0f, 340.0f));
+		ColorPickerWidget->SetDesiredSizeInViewport(FVector2D(520.0f, 700.0f));
 	}
 }
 
@@ -445,7 +445,7 @@ void AChameleonHiderCharacter::UpdateBrushCursorPosition()
 	float MouseY = 0.0f;
 	if (PlayerController->GetMousePosition(MouseX, MouseY))
 	{
-		BrushCursorWidget->SetPositionInViewport(FVector2D(MouseX - 6.0f, MouseY - 6.0f), false);
+		BrushCursorWidget->SetPositionInViewport(FVector2D(MouseX - 6.0f, MouseY - 6.0f), true);
 	}
 }
 

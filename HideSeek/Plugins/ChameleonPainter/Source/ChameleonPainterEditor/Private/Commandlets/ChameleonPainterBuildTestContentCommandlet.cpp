@@ -15,6 +15,7 @@
 #include "Components/Image.h"
 #include "Components/SizeBox.h"
 #include "Components/Slider.h"
+#include "Components/SpinBox.h"
 #include "Components/SkyAtmosphereComponent.h"
 #include "Components/SkyLightComponent.h"
 #include "Components/StaticMeshComponent.h"
@@ -61,6 +62,7 @@
 #include "Misc/ConfigCacheIni.h"
 #include "Misc/PackageName.h"
 #include "UI/ChameleonColorPickerWidget.h"
+#include "UI/ChameleonHSVColorWheelWidget.h"
 #include "UObject/SavePackage.h"
 #include "WidgetBlueprint.h"
 
@@ -75,8 +77,8 @@ const FString InputPath = RootPath / TEXT("Input");
 const FString BlueprintPath = RootPath / TEXT("Blueprints");
 const FString UIPath = RootPath / TEXT("UI");
 const FString MapPath = RootPath / TEXT("Maps");
-constexpr float ColorPickerWidgetWidth = 400.0f;
-constexpr float ColorPickerWidgetHeight = 340.0f;
+constexpr float ColorPickerWidgetWidth = 520.0f;
+constexpr float ColorPickerWidgetHeight = 700.0f;
 
 FString ToObjectPath(const FString& PackageName)
 {
@@ -548,6 +550,53 @@ UTextBlock* CreateWidgetText(UWidgetTree* WidgetTree, const FName& Name, const F
 	return TextBlock;
 }
 
+UTextBlock* CreateColorPickerText(UWidgetTree* WidgetTree, const FName& Name, const FText& Text, float FontSize)
+{
+	UTextBlock* TextBlock = CreateWidgetText(WidgetTree, Name, Text);
+	FSlateFontInfo Font = TextBlock->GetFont();
+	Font.Size = FMath::RoundToInt(FontSize);
+	TextBlock->SetFont(Font);
+	TextBlock->SetShadowOffset(FVector2D(1.0f, 1.0f));
+	TextBlock->SetShadowColorAndOpacity(FLinearColor(0.0f, 0.0f, 0.0f, 0.55f));
+	return TextBlock;
+}
+
+USlider* CreateColorPickerSlider(UWidgetTree* WidgetTree, const FName& Name, float InitialValue, const FLinearColor& AccentColor)
+{
+	USlider* Slider = WidgetTree->ConstructWidget<USlider>(USlider::StaticClass(), Name);
+	Slider->SetValue(FMath::Clamp(InitialValue, 0.0f, 1.0f));
+
+	FSliderStyle SliderStyle = Slider->GetWidgetStyle();
+	SliderStyle.NormalBarImage.TintColor = FSlateColor(AccentColor);
+	SliderStyle.HoveredBarImage.TintColor = FSlateColor(AccentColor);
+	SliderStyle.DisabledBarImage.TintColor = FSlateColor(AccentColor.CopyWithNewOpacity(0.35f));
+	SliderStyle.NormalThumbImage.TintColor = FSlateColor(FLinearColor::White);
+	SliderStyle.HoveredThumbImage.TintColor = FSlateColor(FLinearColor::White);
+	SliderStyle.DisabledThumbImage.TintColor = FSlateColor(FLinearColor(0.45f, 0.45f, 0.45f, 1.0f));
+	Slider->SetWidgetStyle(SliderStyle);
+	return Slider;
+}
+
+USpinBox* CreateColorPickerValueBox(UWidgetTree* WidgetTree, const FName& Name, float InitialValue)
+{
+	USpinBox* SpinBox = WidgetTree->ConstructWidget<USpinBox>(USpinBox::StaticClass(), Name);
+	SpinBox->SetMinValue(0.0f);
+	SpinBox->SetMaxValue(255.0f);
+	SpinBox->SetMinSliderValue(0.0f);
+	SpinBox->SetMaxSliderValue(255.0f);
+	SpinBox->SetDelta(1.0f);
+	SpinBox->SetMinFractionalDigits(0);
+	SpinBox->SetMaxFractionalDigits(0);
+	SpinBox->SetValue(FMath::Clamp(InitialValue, 0.0f, 255.0f));
+	SpinBox->SetForegroundColor(FSlateColor(FLinearColor::White));
+	return SpinBox;
+}
+
+int32 UnitToByte(float Value)
+{
+	return FMath::Clamp(FMath::RoundToInt(FMath::Clamp(Value, 0.0f, 1.0f) * 255.0f), 0, 255);
+}
+
 FLinearColor GetDefaultBrushColor()
 {
 	return FLinearColor(1.0f, 0.02f, 0.02f, 1.0f);
@@ -762,28 +811,21 @@ void RebuildColorPickerWidgetTree(UWidgetBlueprint* WidgetBlueprint)
 		return;
 	}
 
-	if (!WidgetBlueprint->WidgetTree)
+	if (WidgetBlueprint->WidgetTree)
 	{
-		WidgetBlueprint->WidgetTree = NewObject<UWidgetTree>(WidgetBlueprint, TEXT("WidgetTree"), RF_Transactional);
+		WidgetBlueprint->WidgetTree->Rename(nullptr, GetTransientPackage(), REN_DontCreateRedirectors | REN_ForceNoResetLoaders);
 	}
+	WidgetBlueprint->WidgetTree = NewObject<UWidgetTree>(WidgetBlueprint, TEXT("WidgetTree"), RF_Transactional);
 
 	UWidgetTree* WidgetTree = WidgetBlueprint->WidgetTree;
 	if (!WidgetTree)
 	{
 		return;
 	}
-	if (WidgetTree->RootWidget)
-	{
-		WidgetBlueprint->Modify();
-		WidgetTree->Modify();
-		ApplyColorPickerSwatchColors(WidgetBlueprint, WidgetTree);
-		FBlueprintEditorUtils::MarkBlueprintAsStructurallyModified(WidgetBlueprint);
-		WidgetBlueprint->MarkPackageDirty();
-		return;
-	}
 
 	WidgetBlueprint->Modify();
 	WidgetTree->Modify();
+	WidgetBlueprint->WidgetVariableNameToGuidMap.Empty();
 
 	USizeBox* ColorPickerSize = WidgetTree->ConstructWidget<USizeBox>(USizeBox::StaticClass(), TEXT("ColorPickerSize"));
 	EnsureWidgetVariableGuid(WidgetBlueprint, ColorPickerSize);
@@ -793,44 +835,129 @@ void RebuildColorPickerWidgetTree(UWidgetBlueprint* WidgetBlueprint)
 
 	UBorder* PanelBorder = WidgetTree->ConstructWidget<UBorder>(UBorder::StaticClass(), TEXT("BrushColorPanel"));
 	EnsureWidgetVariableGuid(WidgetBlueprint, PanelBorder);
-	PanelBorder->SetBrushColor(FLinearColor(0.02f, 0.025f, 0.028f, 0.92f));
-	PanelBorder->SetPadding(FMargin(12.0f));
+	PanelBorder->SetBrushColor(FLinearColor(0.015f, 0.018f, 0.022f, 0.93f));
+	PanelBorder->SetPadding(FMargin(14.0f));
 	ColorPickerSize->SetContent(PanelBorder);
 
 	UVerticalBox* RootBox = WidgetTree->ConstructWidget<UVerticalBox>(UVerticalBox::StaticClass(), TEXT("ColorPickerRoot"));
 	EnsureWidgetVariableGuid(WidgetBlueprint, RootBox);
 	PanelBorder->SetContent(RootBox);
 
-	UTextBlock* TitleText = CreateWidgetText(WidgetTree, TEXT("TitleText"), FText::FromString(TEXT("Brush Color")));
+	UTextBlock* TitleText = CreateColorPickerText(WidgetTree, TEXT("TitleText"), FText::FromString(TEXT("Paint")), 31.0f);
 	EnsureWidgetVariableGuid(WidgetBlueprint, TitleText);
 	if (UVerticalBoxSlot* TitleSlot = RootBox->AddChildToVerticalBox(TitleText))
 	{
-		TitleSlot->SetPadding(FMargin(0.0f, 0.0f, 0.0f, 8.0f));
+		TitleSlot->SetPadding(FMargin(0.0f, 0.0f, 0.0f, 10.0f));
 	}
 
 	USizeBox* PreviewSize = WidgetTree->ConstructWidget<USizeBox>(USizeBox::StaticClass(), TEXT("PreviewSize"));
 	EnsureWidgetVariableGuid(WidgetBlueprint, PreviewSize);
-	PreviewSize->SetHeightOverride(30.0f);
+	PreviewSize->SetHeightOverride(44.0f);
 	UBorder* ColorPreview = WidgetTree->ConstructWidget<UBorder>(UBorder::StaticClass(), TEXT("ColorPreview"));
 	EnsureWidgetVariableGuid(WidgetBlueprint, ColorPreview);
 	ColorPreview->SetBrushColor(GetDefaultBrushColor());
 	PreviewSize->SetContent(ColorPreview);
 	if (UVerticalBoxSlot* PreviewSlot = RootBox->AddChildToVerticalBox(PreviewSize))
 	{
-		PreviewSlot->SetPadding(FMargin(0.0f, 0.0f, 0.0f, 8.0f));
+		PreviewSlot->SetPadding(FMargin(0.0f, 0.0f, 0.0f, 14.0f));
 	}
+
+	UHorizontalBox* PickerAndHistoryRow = WidgetTree->ConstructWidget<UHorizontalBox>(UHorizontalBox::StaticClass(), TEXT("PickerAndHistoryRow"));
+	EnsureWidgetVariableGuid(WidgetBlueprint, PickerAndHistoryRow);
+
+	USizeBox* WheelSize = WidgetTree->ConstructWidget<USizeBox>(USizeBox::StaticClass(), TEXT("HSVWheelSize"));
+	EnsureWidgetVariableGuid(WidgetBlueprint, WheelSize);
+	WheelSize->SetWidthOverride(226.0f);
+	WheelSize->SetHeightOverride(226.0f);
+	UChameleonHSVColorWheelWidget* HSVWheel = WidgetTree->ConstructWidget<UChameleonHSVColorWheelWidget>(UChameleonHSVColorWheelWidget::StaticClass(), TEXT("HSVWheel"));
+	EnsureWidgetVariableGuid(WidgetBlueprint, HSVWheel);
+	HSVWheel->SetSelectedColor(GetDefaultBrushColor());
+	WheelSize->SetContent(HSVWheel);
+	if (UHorizontalBoxSlot* WheelSlot = PickerAndHistoryRow->AddChildToHorizontalBox(WheelSize))
+	{
+		WheelSlot->SetPadding(FMargin(0.0f, 0.0f, 14.0f, 0.0f));
+	}
+
+	UBorder* HistoryPanel = WidgetTree->ConstructWidget<UBorder>(UBorder::StaticClass(), TEXT("HistoryPanel"));
+	EnsureWidgetVariableGuid(WidgetBlueprint, HistoryPanel);
+	HistoryPanel->SetBrushColor(FLinearColor(0.025f, 0.03f, 0.036f, 0.86f));
+	HistoryPanel->SetPadding(FMargin(10.0f));
+	UVerticalBox* HistoryBox = WidgetTree->ConstructWidget<UVerticalBox>(UVerticalBox::StaticClass(), TEXT("HistoryBox"));
+	EnsureWidgetVariableGuid(WidgetBlueprint, HistoryBox);
+	HistoryPanel->SetContent(HistoryBox);
+	UTextBlock* HistoryLabel = CreateColorPickerText(WidgetTree, TEXT("HistoryLabel"), FText::FromString(TEXT("History")), 18.0f);
+	EnsureWidgetVariableGuid(WidgetBlueprint, HistoryLabel);
+	HistoryBox->AddChildToVerticalBox(HistoryLabel);
+
+	const TArray<FLinearColor> HistoryColors = {
+		FLinearColor(1.0f, 0.02f, 0.02f, 1.0f),
+		FLinearColor(1.0f, 0.28f, 0.02f, 1.0f),
+		FLinearColor(1.0f, 0.62f, 0.02f, 1.0f),
+		FLinearColor(1.0f, 0.88f, 0.02f, 1.0f),
+		FLinearColor(0.42f, 0.9f, 0.14f, 1.0f),
+		FLinearColor(0.12f, 0.72f, 0.56f, 1.0f),
+		FLinearColor(0.0f, 0.82f, 0.9f, 1.0f),
+		FLinearColor(0.02f, 0.28f, 1.0f, 1.0f),
+		FLinearColor(0.7f, 0.04f, 1.0f, 1.0f),
+		FLinearColor(1.0f, 0.0f, 0.55f, 1.0f)
+	};
+	for (int32 RowIndex = 0; RowIndex < 2; ++RowIndex)
+	{
+		UHorizontalBox* HistoryRow = WidgetTree->ConstructWidget<UHorizontalBox>(
+			UHorizontalBox::StaticClass(),
+			FName(*FString::Printf(TEXT("HistoryRow%d"), RowIndex)));
+		EnsureWidgetVariableGuid(WidgetBlueprint, HistoryRow);
+		for (int32 ColumnIndex = 0; ColumnIndex < 5; ++ColumnIndex)
+		{
+			const int32 HistoryIndex = RowIndex * 5 + ColumnIndex;
+			USizeBox* HistorySwatchSize = WidgetTree->ConstructWidget<USizeBox>(
+				USizeBox::StaticClass(),
+				FName(*FString::Printf(TEXT("HistorySwatchSize%d"), HistoryIndex)));
+			EnsureWidgetVariableGuid(WidgetBlueprint, HistorySwatchSize);
+			HistorySwatchSize->SetWidthOverride(38.0f);
+			HistorySwatchSize->SetHeightOverride(38.0f);
+			UButton* HistorySwatch = WidgetTree->ConstructWidget<UButton>(
+				UButton::StaticClass(),
+				FName(*FString::Printf(TEXT("HistorySwatch%d"), HistoryIndex)));
+			EnsureWidgetVariableGuid(WidgetBlueprint, HistorySwatch);
+			HistorySwatch->SetBackgroundColor(HistoryColors[HistoryIndex]);
+			HistorySwatchSize->SetContent(HistorySwatch);
+			if (UHorizontalBoxSlot* HistorySwatchSlot = HistoryRow->AddChildToHorizontalBox(HistorySwatchSize))
+			{
+				HistorySwatchSlot->SetPadding(FMargin(0.0f, 7.0f, 7.0f, 0.0f));
+			}
+		}
+		HistoryBox->AddChildToVerticalBox(HistoryRow);
+	}
+	PickerAndHistoryRow->AddChildToHorizontalBox(HistoryPanel);
+	if (UVerticalBoxSlot* PickerRowSlot = RootBox->AddChildToVerticalBox(PickerAndHistoryRow))
+	{
+		PickerRowSlot->SetPadding(FMargin(0.0f, 0.0f, 0.0f, 12.0f));
+	}
+
+	UBorder* SwatchesPanel = WidgetTree->ConstructWidget<UBorder>(UBorder::StaticClass(), TEXT("SwatchesPanel"));
+	EnsureWidgetVariableGuid(WidgetBlueprint, SwatchesPanel);
+	SwatchesPanel->SetBrushColor(FLinearColor(0.025f, 0.03f, 0.036f, 0.86f));
+	SwatchesPanel->SetPadding(FMargin(10.0f, 8.0f));
+	UVerticalBox* SwatchesBox = WidgetTree->ConstructWidget<UVerticalBox>(UVerticalBox::StaticClass(), TEXT("SwatchesBox"));
+	EnsureWidgetVariableGuid(WidgetBlueprint, SwatchesBox);
+	SwatchesPanel->SetContent(SwatchesBox);
+	UTextBlock* SwatchesLabel = CreateColorPickerText(WidgetTree, TEXT("SwatchesLabel"), FText::FromString(TEXT("Swatches")), 17.0f);
+	EnsureWidgetVariableGuid(WidgetBlueprint, SwatchesLabel);
+	SwatchesBox->AddChildToVerticalBox(SwatchesLabel);
 
 	UHorizontalBox* SwatchRow = WidgetTree->ConstructWidget<UHorizontalBox>(UHorizontalBox::StaticClass(), TEXT("Swatches"));
 	EnsureWidgetVariableGuid(WidgetBlueprint, SwatchRow);
 	const TArray<FLinearColor> SwatchColors = GetHighVisibilitySwatchColors();
 	for (int32 Index = 0; Index < SwatchColors.Num(); ++Index)
 	{
+		const bool bLargeSwatch = Index == 8 || Index == 9;
 		USizeBox* SwatchSize = WidgetTree->ConstructWidget<USizeBox>(
 			USizeBox::StaticClass(),
 			FName(*FString::Printf(TEXT("SwatchSize%d"), Index)));
 		EnsureWidgetVariableGuid(WidgetBlueprint, SwatchSize);
-		SwatchSize->SetWidthOverride(26.0f);
-		SwatchSize->SetHeightOverride(26.0f);
+		SwatchSize->SetWidthOverride(bLargeSwatch ? 54.0f : 30.0f);
+		SwatchSize->SetHeightOverride(bLargeSwatch ? 54.0f : 30.0f);
 
 		UButton* SwatchButton = WidgetTree->ConstructWidget<UButton>(
 			UButton::StaticClass(),
@@ -841,54 +968,164 @@ void RebuildColorPickerWidgetTree(UWidgetBlueprint* WidgetBlueprint)
 
 		if (UHorizontalBoxSlot* SwatchSlot = SwatchRow->AddChildToHorizontalBox(SwatchSize))
 		{
-			SwatchSlot->SetPadding(FMargin(0.0f, 0.0f, 4.0f, 0.0f));
+			SwatchSlot->SetPadding(FMargin(0.0f, 7.0f, 6.0f, 0.0f));
 		}
 	}
-	if (UVerticalBoxSlot* SwatchRowSlot = RootBox->AddChildToVerticalBox(SwatchRow))
+	SwatchesBox->AddChildToVerticalBox(SwatchRow);
+	if (UVerticalBoxSlot* SwatchRowSlot = RootBox->AddChildToVerticalBox(SwatchesPanel))
 	{
-		SwatchRowSlot->SetPadding(FMargin(0.0f, 0.0f, 0.0f, 8.0f));
+		SwatchRowSlot->SetPadding(FMargin(0.0f, 0.0f, 0.0f, 12.0f));
 	}
 
-	auto AddSliderRow = [WidgetTree, RootBox](const FText& LabelText, const FName& SliderName, float InitialValue)
+	UBorder* ColorSlidersPanel = WidgetTree->ConstructWidget<UBorder>(UBorder::StaticClass(), TEXT("ColorSlidersPanel"));
+	EnsureWidgetVariableGuid(WidgetBlueprint, ColorSlidersPanel);
+	ColorSlidersPanel->SetBrushColor(FLinearColor(0.025f, 0.03f, 0.036f, 0.86f));
+	ColorSlidersPanel->SetPadding(FMargin(10.0f));
+	UHorizontalBox* SliderColumns = WidgetTree->ConstructWidget<UHorizontalBox>(UHorizontalBox::StaticClass(), TEXT("SliderColumns"));
+	EnsureWidgetVariableGuid(WidgetBlueprint, SliderColumns);
+	ColorSlidersPanel->SetContent(SliderColumns);
+	UVerticalBox* RGBColumn = WidgetTree->ConstructWidget<UVerticalBox>(UVerticalBox::StaticClass(), TEXT("RGBColumn"));
+	EnsureWidgetVariableGuid(WidgetBlueprint, RGBColumn);
+	UVerticalBox* HSVColumn = WidgetTree->ConstructWidget<UVerticalBox>(UVerticalBox::StaticClass(), TEXT("HSVColumn"));
+	EnsureWidgetVariableGuid(WidgetBlueprint, HSVColumn);
+
+	auto AddColorSliderRow = [WidgetBlueprint, WidgetTree](UVerticalBox* Parent, const FText& LabelText, const FName& SliderName, const FName& ValueBoxName, float InitialValue, const FLinearColor& AccentColor, float SliderWidth)
 	{
 		UHorizontalBox* Row = WidgetTree->ConstructWidget<UHorizontalBox>(
 			UHorizontalBox::StaticClass(),
 			FName(*FString::Printf(TEXT("%sRow"), *SliderName.ToString())));
+		EnsureWidgetVariableGuid(WidgetBlueprint, Row);
 
 		USizeBox* LabelSize = WidgetTree->ConstructWidget<USizeBox>(
 			USizeBox::StaticClass(),
 			FName(*FString::Printf(TEXT("%sLabelSize"), *SliderName.ToString())));
-		LabelSize->SetWidthOverride(34.0f);
-		LabelSize->SetContent(CreateWidgetText(WidgetTree, FName(*FString::Printf(TEXT("%sLabel"), *SliderName.ToString())), LabelText));
+		EnsureWidgetVariableGuid(WidgetBlueprint, LabelSize);
+		LabelSize->SetWidthOverride(28.0f);
+		UTextBlock* Label = CreateColorPickerText(WidgetTree, FName(*FString::Printf(TEXT("%sLabel"), *SliderName.ToString())), LabelText, 18.0f);
+		EnsureWidgetVariableGuid(WidgetBlueprint, Label);
+		LabelSize->SetContent(Label);
 		Row->AddChildToHorizontalBox(LabelSize);
 
 		USizeBox* SliderSize = WidgetTree->ConstructWidget<USizeBox>(
 			USizeBox::StaticClass(),
 			FName(*FString::Printf(TEXT("%sSize"), *SliderName.ToString())));
-		SliderSize->SetWidthOverride(240.0f);
-		USlider* Slider = WidgetTree->ConstructWidget<USlider>(USlider::StaticClass(), SliderName);
-		Slider->SetValue(InitialValue);
+		EnsureWidgetVariableGuid(WidgetBlueprint, SliderSize);
+		SliderSize->SetWidthOverride(SliderWidth);
+		USlider* Slider = CreateColorPickerSlider(WidgetTree, SliderName, InitialValue, AccentColor);
+		EnsureWidgetVariableGuid(WidgetBlueprint, Slider);
 		SliderSize->SetContent(Slider);
-		Row->AddChildToHorizontalBox(SliderSize);
-
-		if (UVerticalBoxSlot* RowSlot = RootBox->AddChildToVerticalBox(Row))
+		if (UHorizontalBoxSlot* SliderSlot = Row->AddChildToHorizontalBox(SliderSize))
 		{
-			RowSlot->SetPadding(FMargin(0.0f, 0.0f, 0.0f, 6.0f));
+			SliderSlot->SetPadding(FMargin(0.0f, 0.0f, 8.0f, 0.0f));
+		}
+
+		USizeBox* ValueBoxSize = WidgetTree->ConstructWidget<USizeBox>(
+			USizeBox::StaticClass(),
+			FName(*FString::Printf(TEXT("%sSize"), *ValueBoxName.ToString())));
+		EnsureWidgetVariableGuid(WidgetBlueprint, ValueBoxSize);
+		ValueBoxSize->SetWidthOverride(56.0f);
+		USpinBox* ValueBox = CreateColorPickerValueBox(WidgetTree, ValueBoxName, UnitToByte(InitialValue));
+		EnsureWidgetVariableGuid(WidgetBlueprint, ValueBox);
+		ValueBoxSize->SetContent(ValueBox);
+		Row->AddChildToHorizontalBox(ValueBoxSize);
+
+		if (UVerticalBoxSlot* RowSlot = Parent->AddChildToVerticalBox(Row))
+		{
+			RowSlot->SetPadding(FMargin(0.0f, 0.0f, 0.0f, 7.0f));
 		}
 	};
 
-	AddSliderRow(FText::FromString(TEXT("R")), TEXT("RedSlider"), GetDefaultBrushColor().R);
-	AddSliderRow(FText::FromString(TEXT("G")), TEXT("GreenSlider"), GetDefaultBrushColor().G);
-	AddSliderRow(FText::FromString(TEXT("B")), TEXT("BlueSlider"), GetDefaultBrushColor().B);
-	AddSliderRow(FText::FromString(TEXT("Rgh")), TEXT("RoughnessSlider"), GetDefaultBrushRoughness());
-	AddSliderRow(FText::FromString(TEXT("Met")), TEXT("MetallicSlider"), GetDefaultBrushMetallic());
+	const FLinearColor DefaultBrushColor = GetDefaultBrushColor();
+	const FLinearColor DefaultHSV = DefaultBrushColor.LinearRGBToHSV();
+	AddColorSliderRow(RGBColumn, FText::FromString(TEXT("R")), TEXT("RedSlider"), TEXT("RedValueBox"), DefaultBrushColor.R, FLinearColor(1.0f, 0.06f, 0.04f, 1.0f), 136.0f);
+	AddColorSliderRow(RGBColumn, FText::FromString(TEXT("G")), TEXT("GreenSlider"), TEXT("GreenValueBox"), DefaultBrushColor.G, FLinearColor(0.0f, 0.9f, 0.05f, 1.0f), 136.0f);
+	AddColorSliderRow(RGBColumn, FText::FromString(TEXT("B")), TEXT("BlueSlider"), TEXT("BlueValueBox"), DefaultBrushColor.B, FLinearColor(0.02f, 0.12f, 1.0f, 1.0f), 136.0f);
+	AddColorSliderRow(HSVColumn, FText::FromString(TEXT("H")), TEXT("HueSlider"), TEXT("HueValueBox"), FMath::Clamp(DefaultHSV.R / 360.0f, 0.0f, 1.0f), FLinearColor(1.0f, 0.25f, 0.0f, 1.0f), 136.0f);
+	AddColorSliderRow(HSVColumn, FText::FromString(TEXT("S")), TEXT("SaturationSlider"), TEXT("SaturationValueBox"), FMath::Clamp(DefaultHSV.G, 0.0f, 1.0f), FLinearColor(1.0f, 0.36f, 0.18f, 1.0f), 136.0f);
+	AddColorSliderRow(HSVColumn, FText::FromString(TEXT("V")), TEXT("ValueSlider"), TEXT("ValueValueBox"), FMath::Clamp(DefaultHSV.B, 0.0f, 1.0f), FLinearColor(0.9f, 0.34f, 0.0f, 1.0f), 136.0f);
+
+	if (UHorizontalBoxSlot* RGBSlot = SliderColumns->AddChildToHorizontalBox(RGBColumn))
+	{
+		RGBSlot->SetPadding(FMargin(0.0f, 0.0f, 12.0f, 0.0f));
+	}
+	SliderColumns->AddChildToHorizontalBox(HSVColumn);
+	if (UVerticalBoxSlot* ColorSliderSlot = RootBox->AddChildToVerticalBox(ColorSlidersPanel))
+	{
+		ColorSliderSlot->SetPadding(FMargin(0.0f, 0.0f, 0.0f, 12.0f));
+	}
+
+	UBorder* MaterialPanel = WidgetTree->ConstructWidget<UBorder>(UBorder::StaticClass(), TEXT("MaterialPanel"));
+	EnsureWidgetVariableGuid(WidgetBlueprint, MaterialPanel);
+	MaterialPanel->SetBrushColor(FLinearColor(0.025f, 0.03f, 0.036f, 0.86f));
+	MaterialPanel->SetPadding(FMargin(10.0f));
+	UVerticalBox* MaterialBox = WidgetTree->ConstructWidget<UVerticalBox>(UVerticalBox::StaticClass(), TEXT("MaterialBox"));
+	EnsureWidgetVariableGuid(WidgetBlueprint, MaterialBox);
+	MaterialPanel->SetContent(MaterialBox);
+
+	auto AddMaterialSliderRow = [WidgetBlueprint, WidgetTree, MaterialBox](const FText& LabelText, const FName& SliderName, const FName& ValueBoxName, float InitialValue)
+	{
+		UHorizontalBox* Row = WidgetTree->ConstructWidget<UHorizontalBox>(
+			UHorizontalBox::StaticClass(),
+			FName(*FString::Printf(TEXT("%sRow"), *SliderName.ToString())));
+		EnsureWidgetVariableGuid(WidgetBlueprint, Row);
+
+		USizeBox* LabelSize = WidgetTree->ConstructWidget<USizeBox>(
+			USizeBox::StaticClass(),
+			FName(*FString::Printf(TEXT("%sLabelSize"), *SliderName.ToString())));
+		EnsureWidgetVariableGuid(WidgetBlueprint, LabelSize);
+		LabelSize->SetWidthOverride(52.0f);
+		UTextBlock* Label = CreateColorPickerText(WidgetTree, FName(*FString::Printf(TEXT("%sLabel"), *SliderName.ToString())), LabelText, 18.0f);
+		EnsureWidgetVariableGuid(WidgetBlueprint, Label);
+		LabelSize->SetContent(Label);
+		Row->AddChildToHorizontalBox(LabelSize);
+
+		USizeBox* SliderSize = WidgetTree->ConstructWidget<USizeBox>(
+			USizeBox::StaticClass(),
+			FName(*FString::Printf(TEXT("%sSize"), *SliderName.ToString())));
+		EnsureWidgetVariableGuid(WidgetBlueprint, SliderSize);
+		SliderSize->SetWidthOverride(342.0f);
+		USlider* Slider = CreateColorPickerSlider(WidgetTree, SliderName, InitialValue, FLinearColor(0.34f, 0.34f, 0.34f, 1.0f));
+		EnsureWidgetVariableGuid(WidgetBlueprint, Slider);
+		SliderSize->SetContent(Slider);
+		if (UHorizontalBoxSlot* SliderSlot = Row->AddChildToHorizontalBox(SliderSize))
+		{
+			SliderSlot->SetPadding(FMargin(0.0f, 0.0f, 10.0f, 0.0f));
+		}
+
+		USizeBox* ValueBoxSize = WidgetTree->ConstructWidget<USizeBox>(
+			USizeBox::StaticClass(),
+			FName(*FString::Printf(TEXT("%sSize"), *ValueBoxName.ToString())));
+		EnsureWidgetVariableGuid(WidgetBlueprint, ValueBoxSize);
+		ValueBoxSize->SetWidthOverride(60.0f);
+		USpinBox* ValueBox = CreateColorPickerValueBox(WidgetTree, ValueBoxName, UnitToByte(InitialValue));
+		EnsureWidgetVariableGuid(WidgetBlueprint, ValueBox);
+		ValueBoxSize->SetContent(ValueBox);
+		Row->AddChildToHorizontalBox(ValueBoxSize);
+
+		if (UVerticalBoxSlot* RowSlot = MaterialBox->AddChildToVerticalBox(Row))
+		{
+			RowSlot->SetPadding(FMargin(0.0f, 0.0f, 0.0f, 7.0f));
+		}
+	};
+
+	AddMaterialSliderRow(FText::FromString(TEXT("Rgh")), TEXT("RoughnessSlider"), TEXT("RoughnessValueBox"), GetDefaultBrushRoughness());
+	AddMaterialSliderRow(FText::FromString(TEXT("Met")), TEXT("MetallicSlider"), TEXT("MetallicValueBox"), GetDefaultBrushMetallic());
+	if (UVerticalBoxSlot* MaterialSlot = RootBox->AddChildToVerticalBox(MaterialPanel))
+	{
+		MaterialSlot->SetPadding(FMargin(0.0f, 0.0f, 0.0f, 14.0f));
+	}
 
 	UButton* CommitButton = WidgetTree->ConstructWidget<UButton>(UButton::StaticClass(), TEXT("CommitButton"));
 	EnsureWidgetVariableGuid(WidgetBlueprint, CommitButton);
-	UTextBlock* CommitText = CreateWidgetText(WidgetTree, TEXT("CommitText"), FText::FromString(TEXT("Apply")));
+	CommitButton->SetBackgroundColor(FLinearColor(0.02f, 0.22f, 0.52f, 1.0f));
+	UTextBlock* CommitText = CreateColorPickerText(WidgetTree, TEXT("CommitText"), FText::FromString(TEXT("Apply")), 28.0f);
 	EnsureWidgetVariableGuid(WidgetBlueprint, CommitText);
 	CommitButton->SetContent(CommitText);
-	RootBox->AddChildToVerticalBox(CommitButton);
+	USizeBox* CommitSize = WidgetTree->ConstructWidget<USizeBox>(USizeBox::StaticClass(), TEXT("CommitSize"));
+	EnsureWidgetVariableGuid(WidgetBlueprint, CommitSize);
+	CommitSize->SetHeightOverride(54.0f);
+	CommitSize->SetContent(CommitButton);
+	RootBox->AddChildToVerticalBox(CommitSize);
 	EnsureWidgetTreeVariableGuids(WidgetBlueprint, WidgetTree);
 
 	FBlueprintEditorUtils::MarkBlueprintAsStructurallyModified(WidgetBlueprint);

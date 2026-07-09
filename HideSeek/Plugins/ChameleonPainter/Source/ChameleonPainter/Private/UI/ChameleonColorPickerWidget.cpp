@@ -5,10 +5,75 @@
 #include "Components/Button.h"
 #include "Components/ChameleonPaintComponent.h"
 #include "Components/HorizontalBox.h"
+#include "Components/HorizontalBoxSlot.h"
 #include "Components/SizeBox.h"
 #include "Components/Slider.h"
+#include "Components/SpinBox.h"
 #include "Components/TextBlock.h"
 #include "Components/VerticalBox.h"
+#include "Components/VerticalBoxSlot.h"
+#include "UI/ChameleonHSVColorWheelWidget.h"
+
+namespace
+{
+constexpr float ColorPickerWidgetWidth = 520.0f;
+constexpr float ColorPickerWidgetHeight = 700.0f;
+constexpr int32 ColorHistoryCount = 10;
+
+const FLinearColor PanelColor(0.015f, 0.018f, 0.022f, 0.93f);
+const FLinearColor GroupColor(0.025f, 0.03f, 0.036f, 0.86f);
+const FLinearColor TextColor(0.94f, 0.94f, 0.94f, 1.0f);
+const FLinearColor MutedTrackColor(0.34f, 0.34f, 0.34f, 1.0f);
+
+float ClampUnit(float Value)
+{
+	return FMath::Clamp(Value, 0.0f, 1.0f);
+}
+
+int32 UnitToByte(float Value)
+{
+	return FMath::Clamp(FMath::RoundToInt(ClampUnit(Value) * 255.0f), 0, 255);
+}
+
+float ByteToUnit(float Value)
+{
+	return ClampUnit(Value / 255.0f);
+}
+
+FLinearColor ClampColor(FLinearColor Color)
+{
+	Color.R = ClampUnit(Color.R);
+	Color.G = ClampUnit(Color.G);
+	Color.B = ClampUnit(Color.B);
+	Color.A = 1.0f;
+	return Color;
+}
+
+FLinearColor MakeHSVColor(float Hue, float Saturation, float Value)
+{
+	FLinearColor HSV(ClampUnit(Hue) * 360.0f, ClampUnit(Saturation), ClampUnit(Value), 1.0f);
+	FLinearColor RGB = HSV.HSVToLinearRGB();
+	RGB.A = 1.0f;
+	return ClampColor(RGB);
+}
+
+void ApplySliderAccent(USlider* Slider, const FLinearColor& AccentColor)
+{
+	if (!Slider)
+	{
+		return;
+	}
+
+	FSliderStyle SliderStyle = Slider->GetWidgetStyle();
+	SliderStyle.NormalBarImage.TintColor = FSlateColor(AccentColor);
+	SliderStyle.HoveredBarImage.TintColor = FSlateColor(AccentColor);
+	SliderStyle.DisabledBarImage.TintColor = FSlateColor(AccentColor.CopyWithNewOpacity(0.35f));
+	SliderStyle.NormalThumbImage.TintColor = FSlateColor(FLinearColor::White);
+	SliderStyle.HoveredThumbImage.TintColor = FSlateColor(FLinearColor(1.0f, 1.0f, 1.0f, 1.0f));
+	SliderStyle.DisabledThumbImage.TintColor = FSlateColor(FLinearColor(0.45f, 0.45f, 0.45f, 1.0f));
+	Slider->SetWidgetStyle(SliderStyle);
+}
+}
 
 UChameleonColorPickerWidget::UChameleonColorPickerWidget(const FObjectInitializer& ObjectInitializer)
 	: Super(ObjectInitializer)
@@ -26,6 +91,19 @@ UChameleonColorPickerWidget::UChameleonColorPickerWidget(const FObjectInitialize
 		FLinearColor::Black,
 		FLinearColor(0.5f, 0.5f, 0.5f, 1.0f)
 	};
+
+	ColorHistory = {
+		FLinearColor(1.0f, 0.02f, 0.02f, 1.0f),
+		FLinearColor(1.0f, 0.28f, 0.02f, 1.0f),
+		FLinearColor(1.0f, 0.62f, 0.02f, 1.0f),
+		FLinearColor(1.0f, 0.88f, 0.02f, 1.0f),
+		FLinearColor(0.42f, 0.9f, 0.14f, 1.0f),
+		FLinearColor(0.12f, 0.72f, 0.56f, 1.0f),
+		FLinearColor(0.0f, 0.82f, 0.9f, 1.0f),
+		FLinearColor(0.02f, 0.28f, 1.0f, 1.0f),
+		FLinearColor(0.7f, 0.04f, 1.0f, 1.0f),
+		FLinearColor(1.0f, 0.0f, 0.55f, 1.0f)
+	};
 }
 
 void UChameleonColorPickerWidget::NativeConstruct()
@@ -39,6 +117,7 @@ void UChameleonColorPickerWidget::NativeConstruct()
 
 	BindGeneratedWidgetTree();
 	UpdateControlsFromSelectedColor();
+	UpdateHistoryButtons();
 	ApplySelectedColor(false, false);
 	ApplySelectedMaterialProperties(false, false);
 }
@@ -54,6 +133,10 @@ void UChameleonColorPickerWidget::BindGeneratedWidgetTree()
 	{
 		PreviewBorder = Cast<UBorder>(WidgetTree->FindWidget(FName(TEXT("ColorPreview"))));
 	}
+	if (!HSVWheel)
+	{
+		HSVWheel = Cast<UChameleonHSVColorWheelWidget>(WidgetTree->FindWidget(FName(TEXT("HSVWheel"))));
+	}
 	if (!RedSlider)
 	{
 		RedSlider = Cast<USlider>(WidgetTree->FindWidget(FName(TEXT("RedSlider"))));
@@ -66,6 +149,18 @@ void UChameleonColorPickerWidget::BindGeneratedWidgetTree()
 	{
 		BlueSlider = Cast<USlider>(WidgetTree->FindWidget(FName(TEXT("BlueSlider"))));
 	}
+	if (!HueSlider)
+	{
+		HueSlider = Cast<USlider>(WidgetTree->FindWidget(FName(TEXT("HueSlider"))));
+	}
+	if (!SaturationSlider)
+	{
+		SaturationSlider = Cast<USlider>(WidgetTree->FindWidget(FName(TEXT("SaturationSlider"))));
+	}
+	if (!ValueSlider)
+	{
+		ValueSlider = Cast<USlider>(WidgetTree->FindWidget(FName(TEXT("ValueSlider"))));
+	}
 	if (!RoughnessSlider)
 	{
 		RoughnessSlider = Cast<USlider>(WidgetTree->FindWidget(FName(TEXT("RoughnessSlider"))));
@@ -74,11 +169,47 @@ void UChameleonColorPickerWidget::BindGeneratedWidgetTree()
 	{
 		MetallicSlider = Cast<USlider>(WidgetTree->FindWidget(FName(TEXT("MetallicSlider"))));
 	}
+	if (!RedValueBox)
+	{
+		RedValueBox = Cast<USpinBox>(WidgetTree->FindWidget(FName(TEXT("RedValueBox"))));
+	}
+	if (!GreenValueBox)
+	{
+		GreenValueBox = Cast<USpinBox>(WidgetTree->FindWidget(FName(TEXT("GreenValueBox"))));
+	}
+	if (!BlueValueBox)
+	{
+		BlueValueBox = Cast<USpinBox>(WidgetTree->FindWidget(FName(TEXT("BlueValueBox"))));
+	}
+	if (!HueValueBox)
+	{
+		HueValueBox = Cast<USpinBox>(WidgetTree->FindWidget(FName(TEXT("HueValueBox"))));
+	}
+	if (!SaturationValueBox)
+	{
+		SaturationValueBox = Cast<USpinBox>(WidgetTree->FindWidget(FName(TEXT("SaturationValueBox"))));
+	}
+	if (!ValueValueBox)
+	{
+		ValueValueBox = Cast<USpinBox>(WidgetTree->FindWidget(FName(TEXT("ValueValueBox"))));
+	}
+	if (!RoughnessValueBox)
+	{
+		RoughnessValueBox = Cast<USpinBox>(WidgetTree->FindWidget(FName(TEXT("RoughnessValueBox"))));
+	}
+	if (!MetallicValueBox)
+	{
+		MetallicValueBox = Cast<USpinBox>(WidgetTree->FindWidget(FName(TEXT("MetallicValueBox"))));
+	}
 	if (!CommitButton)
 	{
 		CommitButton = Cast<UButton>(WidgetTree->FindWidget(FName(TEXT("CommitButton"))));
 	}
 
+	if (HSVWheel)
+	{
+		HSVWheel->OnColorChanged.AddUniqueDynamic(this, &UChameleonColorPickerWidget::HandleHSVWheelColorChanged);
+	}
 	if (RedSlider)
 	{
 		RedSlider->OnValueChanged.AddUniqueDynamic(this, &UChameleonColorPickerWidget::HandleRedChanged);
@@ -91,6 +222,18 @@ void UChameleonColorPickerWidget::BindGeneratedWidgetTree()
 	{
 		BlueSlider->OnValueChanged.AddUniqueDynamic(this, &UChameleonColorPickerWidget::HandleBlueChanged);
 	}
+	if (HueSlider)
+	{
+		HueSlider->OnValueChanged.AddUniqueDynamic(this, &UChameleonColorPickerWidget::HandleHueChanged);
+	}
+	if (SaturationSlider)
+	{
+		SaturationSlider->OnValueChanged.AddUniqueDynamic(this, &UChameleonColorPickerWidget::HandleSaturationChanged);
+	}
+	if (ValueSlider)
+	{
+		ValueSlider->OnValueChanged.AddUniqueDynamic(this, &UChameleonColorPickerWidget::HandleValueChanged);
+	}
 	if (RoughnessSlider)
 	{
 		RoughnessSlider->OnValueChanged.AddUniqueDynamic(this, &UChameleonColorPickerWidget::HandleRoughnessChanged);
@@ -99,22 +242,51 @@ void UChameleonColorPickerWidget::BindGeneratedWidgetTree()
 	{
 		MetallicSlider->OnValueChanged.AddUniqueDynamic(this, &UChameleonColorPickerWidget::HandleMetallicChanged);
 	}
+	if (RedValueBox)
+	{
+		RedValueBox->OnValueChanged.AddUniqueDynamic(this, &UChameleonColorPickerWidget::HandleRedValueChanged);
+	}
+	if (GreenValueBox)
+	{
+		GreenValueBox->OnValueChanged.AddUniqueDynamic(this, &UChameleonColorPickerWidget::HandleGreenValueChanged);
+	}
+	if (BlueValueBox)
+	{
+		BlueValueBox->OnValueChanged.AddUniqueDynamic(this, &UChameleonColorPickerWidget::HandleBlueValueChanged);
+	}
+	if (HueValueBox)
+	{
+		HueValueBox->OnValueChanged.AddUniqueDynamic(this, &UChameleonColorPickerWidget::HandleHueValueChanged);
+	}
+	if (SaturationValueBox)
+	{
+		SaturationValueBox->OnValueChanged.AddUniqueDynamic(this, &UChameleonColorPickerWidget::HandleSaturationValueChanged);
+	}
+	if (ValueValueBox)
+	{
+		ValueValueBox->OnValueChanged.AddUniqueDynamic(this, &UChameleonColorPickerWidget::HandleValueValueChanged);
+	}
+	if (RoughnessValueBox)
+	{
+		RoughnessValueBox->OnValueChanged.AddUniqueDynamic(this, &UChameleonColorPickerWidget::HandleRoughnessValueChanged);
+	}
+	if (MetallicValueBox)
+	{
+		MetallicValueBox->OnValueChanged.AddUniqueDynamic(this, &UChameleonColorPickerWidget::HandleMetallicValueChanged);
+	}
 	if (CommitButton)
 	{
 		CommitButton->OnClicked.AddUniqueDynamic(this, &UChameleonColorPickerWidget::HandleCommitClicked);
 	}
 
-	BindSwatchButton(FName(TEXT("Swatch0")), 0);
-	BindSwatchButton(FName(TEXT("Swatch1")), 1);
-	BindSwatchButton(FName(TEXT("Swatch2")), 2);
-	BindSwatchButton(FName(TEXT("Swatch3")), 3);
-	BindSwatchButton(FName(TEXT("Swatch4")), 4);
-	BindSwatchButton(FName(TEXT("Swatch5")), 5);
-	BindSwatchButton(FName(TEXT("Swatch6")), 6);
-	BindSwatchButton(FName(TEXT("Swatch7")), 7);
-	BindSwatchButton(FName(TEXT("Swatch8")), 8);
-	BindSwatchButton(FName(TEXT("Swatch9")), 9);
-	BindSwatchButton(FName(TEXT("Swatch10")), 10);
+	for (int32 Index = 0; Index < ColorHistoryCount; ++Index)
+	{
+		BindHistoryButton(FName(*FString::Printf(TEXT("HistorySwatch%d"), Index)), Index);
+	}
+	for (int32 Index = 0; Index < SwatchColors.Num(); ++Index)
+	{
+		BindSwatchButton(FName(*FString::Printf(TEXT("Swatch%d"), Index)), Index);
+	}
 }
 
 void UChameleonColorPickerWidget::BindSwatchButton(const FName& WidgetName, int32 SwatchIndex)
@@ -127,60 +299,56 @@ void UChameleonColorPickerWidget::BindSwatchButton(const FName& WidgetName, int3
 
 	switch (SwatchIndex)
 	{
-	case 0:
-		SwatchButton->OnClicked.AddUniqueDynamic(this, &UChameleonColorPickerWidget::HandleSwatch0Clicked);
-		break;
-	case 1:
-		SwatchButton->OnClicked.AddUniqueDynamic(this, &UChameleonColorPickerWidget::HandleSwatch1Clicked);
-		break;
-	case 2:
-		SwatchButton->OnClicked.AddUniqueDynamic(this, &UChameleonColorPickerWidget::HandleSwatch2Clicked);
-		break;
-	case 3:
-		SwatchButton->OnClicked.AddUniqueDynamic(this, &UChameleonColorPickerWidget::HandleSwatch3Clicked);
-		break;
-	case 4:
-		SwatchButton->OnClicked.AddUniqueDynamic(this, &UChameleonColorPickerWidget::HandleSwatch4Clicked);
-		break;
-	case 5:
-		SwatchButton->OnClicked.AddUniqueDynamic(this, &UChameleonColorPickerWidget::HandleSwatch5Clicked);
-		break;
-	case 6:
-		SwatchButton->OnClicked.AddUniqueDynamic(this, &UChameleonColorPickerWidget::HandleSwatch6Clicked);
-		break;
-	case 7:
-		SwatchButton->OnClicked.AddUniqueDynamic(this, &UChameleonColorPickerWidget::HandleSwatch7Clicked);
-		break;
-	case 8:
-		SwatchButton->OnClicked.AddUniqueDynamic(this, &UChameleonColorPickerWidget::HandleSwatch8Clicked);
-		break;
-	case 9:
-		SwatchButton->OnClicked.AddUniqueDynamic(this, &UChameleonColorPickerWidget::HandleSwatch9Clicked);
-		break;
-	case 10:
-		SwatchButton->OnClicked.AddUniqueDynamic(this, &UChameleonColorPickerWidget::HandleSwatch10Clicked);
-		break;
-	default:
-		break;
+	case 0: SwatchButton->OnClicked.AddUniqueDynamic(this, &UChameleonColorPickerWidget::HandleSwatch0Clicked); break;
+	case 1: SwatchButton->OnClicked.AddUniqueDynamic(this, &UChameleonColorPickerWidget::HandleSwatch1Clicked); break;
+	case 2: SwatchButton->OnClicked.AddUniqueDynamic(this, &UChameleonColorPickerWidget::HandleSwatch2Clicked); break;
+	case 3: SwatchButton->OnClicked.AddUniqueDynamic(this, &UChameleonColorPickerWidget::HandleSwatch3Clicked); break;
+	case 4: SwatchButton->OnClicked.AddUniqueDynamic(this, &UChameleonColorPickerWidget::HandleSwatch4Clicked); break;
+	case 5: SwatchButton->OnClicked.AddUniqueDynamic(this, &UChameleonColorPickerWidget::HandleSwatch5Clicked); break;
+	case 6: SwatchButton->OnClicked.AddUniqueDynamic(this, &UChameleonColorPickerWidget::HandleSwatch6Clicked); break;
+	case 7: SwatchButton->OnClicked.AddUniqueDynamic(this, &UChameleonColorPickerWidget::HandleSwatch7Clicked); break;
+	case 8: SwatchButton->OnClicked.AddUniqueDynamic(this, &UChameleonColorPickerWidget::HandleSwatch8Clicked); break;
+	case 9: SwatchButton->OnClicked.AddUniqueDynamic(this, &UChameleonColorPickerWidget::HandleSwatch9Clicked); break;
+	case 10: SwatchButton->OnClicked.AddUniqueDynamic(this, &UChameleonColorPickerWidget::HandleSwatch10Clicked); break;
+	default: break;
+	}
+}
+
+void UChameleonColorPickerWidget::BindHistoryButton(const FName& WidgetName, int32 HistoryIndex)
+{
+	UButton* HistoryButton = WidgetTree ? Cast<UButton>(WidgetTree->FindWidget(WidgetName)) : nullptr;
+	if (!HistoryButton)
+	{
+		return;
+	}
+
+	switch (HistoryIndex)
+	{
+	case 0: HistoryButton->OnClicked.AddUniqueDynamic(this, &UChameleonColorPickerWidget::HandleHistory0Clicked); break;
+	case 1: HistoryButton->OnClicked.AddUniqueDynamic(this, &UChameleonColorPickerWidget::HandleHistory1Clicked); break;
+	case 2: HistoryButton->OnClicked.AddUniqueDynamic(this, &UChameleonColorPickerWidget::HandleHistory2Clicked); break;
+	case 3: HistoryButton->OnClicked.AddUniqueDynamic(this, &UChameleonColorPickerWidget::HandleHistory3Clicked); break;
+	case 4: HistoryButton->OnClicked.AddUniqueDynamic(this, &UChameleonColorPickerWidget::HandleHistory4Clicked); break;
+	case 5: HistoryButton->OnClicked.AddUniqueDynamic(this, &UChameleonColorPickerWidget::HandleHistory5Clicked); break;
+	case 6: HistoryButton->OnClicked.AddUniqueDynamic(this, &UChameleonColorPickerWidget::HandleHistory6Clicked); break;
+	case 7: HistoryButton->OnClicked.AddUniqueDynamic(this, &UChameleonColorPickerWidget::HandleHistory7Clicked); break;
+	case 8: HistoryButton->OnClicked.AddUniqueDynamic(this, &UChameleonColorPickerWidget::HandleHistory8Clicked); break;
+	case 9: HistoryButton->OnClicked.AddUniqueDynamic(this, &UChameleonColorPickerWidget::HandleHistory9Clicked); break;
+	default: break;
 	}
 }
 
 void UChameleonColorPickerWidget::SetSelectedColor(FLinearColor NewColor, bool bBroadcast)
 {
-	NewColor.R = FMath::Clamp(NewColor.R, 0.0f, 1.0f);
-	NewColor.G = FMath::Clamp(NewColor.G, 0.0f, 1.0f);
-	NewColor.B = FMath::Clamp(NewColor.B, 0.0f, 1.0f);
-	NewColor.A = 1.0f;
-	SelectedColor = NewColor;
-
+	SelectedColor = ClampColor(NewColor);
 	UpdateControlsFromSelectedColor();
 	ApplySelectedColor(bBroadcast, false);
 }
 
 void UChameleonColorPickerWidget::SetSelectedMaterialProperties(float NewRoughness, float NewMetallic, bool bBroadcast)
 {
-	SelectedRoughness = FMath::Clamp(NewRoughness, 0.0f, 1.0f);
-	SelectedMetallic = FMath::Clamp(NewMetallic, 0.0f, 1.0f);
+	SelectedRoughness = ClampUnit(NewRoughness);
+	SelectedMetallic = ClampUnit(NewMetallic);
 
 	UpdateControlsFromSelectedColor();
 	ApplySelectedMaterialProperties(bBroadcast, false);
@@ -199,7 +367,7 @@ void UChameleonColorPickerWidget::HandleRedChanged(float Value)
 		return;
 	}
 
-	SelectedColor.R = FMath::Clamp(Value, 0.0f, 1.0f);
+	SelectedColor.R = ClampUnit(Value);
 	ApplySelectedColor(true, false);
 	UpdateControlsFromSelectedColor();
 }
@@ -211,7 +379,7 @@ void UChameleonColorPickerWidget::HandleGreenChanged(float Value)
 		return;
 	}
 
-	SelectedColor.G = FMath::Clamp(Value, 0.0f, 1.0f);
+	SelectedColor.G = ClampUnit(Value);
 	ApplySelectedColor(true, false);
 	UpdateControlsFromSelectedColor();
 }
@@ -223,9 +391,51 @@ void UChameleonColorPickerWidget::HandleBlueChanged(float Value)
 		return;
 	}
 
-	SelectedColor.B = FMath::Clamp(Value, 0.0f, 1.0f);
+	SelectedColor.B = ClampUnit(Value);
 	ApplySelectedColor(true, false);
 	UpdateControlsFromSelectedColor();
+}
+
+void UChameleonColorPickerWidget::HandleHueChanged(float Value)
+{
+	if (bUpdatingControls)
+	{
+		return;
+	}
+
+	float Hue = 0.0f;
+	float Saturation = 0.0f;
+	float ColorValue = 0.0f;
+	GetSelectedHSV(Hue, Saturation, ColorValue);
+	SetSelectedColorFromHSV(Value, Saturation, ColorValue, true);
+}
+
+void UChameleonColorPickerWidget::HandleSaturationChanged(float Value)
+{
+	if (bUpdatingControls)
+	{
+		return;
+	}
+
+	float Hue = 0.0f;
+	float Saturation = 0.0f;
+	float ColorValue = 0.0f;
+	GetSelectedHSV(Hue, Saturation, ColorValue);
+	SetSelectedColorFromHSV(Hue, Value, ColorValue, true);
+}
+
+void UChameleonColorPickerWidget::HandleValueChanged(float Value)
+{
+	if (bUpdatingControls)
+	{
+		return;
+	}
+
+	float Hue = 0.0f;
+	float Saturation = 0.0f;
+	float ColorValue = 0.0f;
+	GetSelectedHSV(Hue, Saturation, ColorValue);
+	SetSelectedColorFromHSV(Hue, Saturation, Value, true);
 }
 
 void UChameleonColorPickerWidget::HandleRoughnessChanged(float Value)
@@ -235,7 +445,7 @@ void UChameleonColorPickerWidget::HandleRoughnessChanged(float Value)
 		return;
 	}
 
-	SelectedRoughness = FMath::Clamp(Value, 0.0f, 1.0f);
+	SelectedRoughness = ClampUnit(Value);
 	ApplySelectedMaterialProperties(true, false);
 	UpdateControlsFromSelectedColor();
 }
@@ -247,71 +457,154 @@ void UChameleonColorPickerWidget::HandleMetallicChanged(float Value)
 		return;
 	}
 
-	SelectedMetallic = FMath::Clamp(Value, 0.0f, 1.0f);
+	SelectedMetallic = ClampUnit(Value);
 	ApplySelectedMaterialProperties(true, false);
+	UpdateControlsFromSelectedColor();
+}
+
+void UChameleonColorPickerWidget::HandleRedValueChanged(float Value)
+{
+	if (bUpdatingControls)
+	{
+		return;
+	}
+
+	SelectedColor.R = ByteToUnit(Value);
+	ApplySelectedColor(true, false);
+	UpdateControlsFromSelectedColor();
+}
+
+void UChameleonColorPickerWidget::HandleGreenValueChanged(float Value)
+{
+	if (bUpdatingControls)
+	{
+		return;
+	}
+
+	SelectedColor.G = ByteToUnit(Value);
+	ApplySelectedColor(true, false);
+	UpdateControlsFromSelectedColor();
+}
+
+void UChameleonColorPickerWidget::HandleBlueValueChanged(float Value)
+{
+	if (bUpdatingControls)
+	{
+		return;
+	}
+
+	SelectedColor.B = ByteToUnit(Value);
+	ApplySelectedColor(true, false);
+	UpdateControlsFromSelectedColor();
+}
+
+void UChameleonColorPickerWidget::HandleHueValueChanged(float Value)
+{
+	if (bUpdatingControls)
+	{
+		return;
+	}
+
+	float Hue = 0.0f;
+	float Saturation = 0.0f;
+	float ColorValue = 0.0f;
+	GetSelectedHSV(Hue, Saturation, ColorValue);
+	SetSelectedColorFromHSV(ByteToUnit(Value), Saturation, ColorValue, true);
+}
+
+void UChameleonColorPickerWidget::HandleSaturationValueChanged(float Value)
+{
+	if (bUpdatingControls)
+	{
+		return;
+	}
+
+	float Hue = 0.0f;
+	float Saturation = 0.0f;
+	float ColorValue = 0.0f;
+	GetSelectedHSV(Hue, Saturation, ColorValue);
+	SetSelectedColorFromHSV(Hue, ByteToUnit(Value), ColorValue, true);
+}
+
+void UChameleonColorPickerWidget::HandleValueValueChanged(float Value)
+{
+	if (bUpdatingControls)
+	{
+		return;
+	}
+
+	float Hue = 0.0f;
+	float Saturation = 0.0f;
+	float ColorValue = 0.0f;
+	GetSelectedHSV(Hue, Saturation, ColorValue);
+	SetSelectedColorFromHSV(Hue, Saturation, ByteToUnit(Value), true);
+}
+
+void UChameleonColorPickerWidget::HandleRoughnessValueChanged(float Value)
+{
+	if (bUpdatingControls)
+	{
+		return;
+	}
+
+	SelectedRoughness = ByteToUnit(Value);
+	ApplySelectedMaterialProperties(true, false);
+	UpdateControlsFromSelectedColor();
+}
+
+void UChameleonColorPickerWidget::HandleMetallicValueChanged(float Value)
+{
+	if (bUpdatingControls)
+	{
+		return;
+	}
+
+	SelectedMetallic = ByteToUnit(Value);
+	ApplySelectedMaterialProperties(true, false);
+	UpdateControlsFromSelectedColor();
+}
+
+void UChameleonColorPickerWidget::HandleHSVWheelColorChanged(FLinearColor NewColor)
+{
+	if (bUpdatingControls)
+	{
+		return;
+	}
+
+	SelectedColor = ClampColor(NewColor);
+	ApplySelectedColor(true, false);
 	UpdateControlsFromSelectedColor();
 }
 
 void UChameleonColorPickerWidget::HandleCommitClicked()
 {
+	RecordHistoryColor(SelectedColor);
 	ApplySelectedColor(true, true);
 	ApplySelectedMaterialProperties(true, true);
 }
 
-void UChameleonColorPickerWidget::HandleSwatch0Clicked()
-{
-	ChooseSwatch(0);
-}
+void UChameleonColorPickerWidget::HandleHistory0Clicked() { ChooseHistory(0); }
+void UChameleonColorPickerWidget::HandleHistory1Clicked() { ChooseHistory(1); }
+void UChameleonColorPickerWidget::HandleHistory2Clicked() { ChooseHistory(2); }
+void UChameleonColorPickerWidget::HandleHistory3Clicked() { ChooseHistory(3); }
+void UChameleonColorPickerWidget::HandleHistory4Clicked() { ChooseHistory(4); }
+void UChameleonColorPickerWidget::HandleHistory5Clicked() { ChooseHistory(5); }
+void UChameleonColorPickerWidget::HandleHistory6Clicked() { ChooseHistory(6); }
+void UChameleonColorPickerWidget::HandleHistory7Clicked() { ChooseHistory(7); }
+void UChameleonColorPickerWidget::HandleHistory8Clicked() { ChooseHistory(8); }
+void UChameleonColorPickerWidget::HandleHistory9Clicked() { ChooseHistory(9); }
 
-void UChameleonColorPickerWidget::HandleSwatch1Clicked()
-{
-	ChooseSwatch(1);
-}
-
-void UChameleonColorPickerWidget::HandleSwatch2Clicked()
-{
-	ChooseSwatch(2);
-}
-
-void UChameleonColorPickerWidget::HandleSwatch3Clicked()
-{
-	ChooseSwatch(3);
-}
-
-void UChameleonColorPickerWidget::HandleSwatch4Clicked()
-{
-	ChooseSwatch(4);
-}
-
-void UChameleonColorPickerWidget::HandleSwatch5Clicked()
-{
-	ChooseSwatch(5);
-}
-
-void UChameleonColorPickerWidget::HandleSwatch6Clicked()
-{
-	ChooseSwatch(6);
-}
-
-void UChameleonColorPickerWidget::HandleSwatch7Clicked()
-{
-	ChooseSwatch(7);
-}
-
-void UChameleonColorPickerWidget::HandleSwatch8Clicked()
-{
-	ChooseSwatch(8);
-}
-
-void UChameleonColorPickerWidget::HandleSwatch9Clicked()
-{
-	ChooseSwatch(9);
-}
-
-void UChameleonColorPickerWidget::HandleSwatch10Clicked()
-{
-	ChooseSwatch(10);
-}
+void UChameleonColorPickerWidget::HandleSwatch0Clicked() { ChooseSwatch(0); }
+void UChameleonColorPickerWidget::HandleSwatch1Clicked() { ChooseSwatch(1); }
+void UChameleonColorPickerWidget::HandleSwatch2Clicked() { ChooseSwatch(2); }
+void UChameleonColorPickerWidget::HandleSwatch3Clicked() { ChooseSwatch(3); }
+void UChameleonColorPickerWidget::HandleSwatch4Clicked() { ChooseSwatch(4); }
+void UChameleonColorPickerWidget::HandleSwatch5Clicked() { ChooseSwatch(5); }
+void UChameleonColorPickerWidget::HandleSwatch6Clicked() { ChooseSwatch(6); }
+void UChameleonColorPickerWidget::HandleSwatch7Clicked() { ChooseSwatch(7); }
+void UChameleonColorPickerWidget::HandleSwatch8Clicked() { ChooseSwatch(8); }
+void UChameleonColorPickerWidget::HandleSwatch9Clicked() { ChooseSwatch(9); }
+void UChameleonColorPickerWidget::HandleSwatch10Clicked() { ChooseSwatch(10); }
 
 void UChameleonColorPickerWidget::BuildDefaultWidgetTree()
 {
@@ -320,76 +613,239 @@ void UChameleonColorPickerWidget::BuildDefaultWidgetTree()
 		return;
 	}
 
+	USizeBox* ColorPickerSize = WidgetTree->ConstructWidget<USizeBox>(USizeBox::StaticClass(), TEXT("ColorPickerSize"));
+	ColorPickerSize->SetWidthOverride(ColorPickerWidgetWidth);
+	ColorPickerSize->SetHeightOverride(ColorPickerWidgetHeight);
+	WidgetTree->RootWidget = ColorPickerSize;
+
 	UBorder* PanelBorder = WidgetTree->ConstructWidget<UBorder>(UBorder::StaticClass(), TEXT("BrushColorPanel"));
-	PanelBorder->SetBrushColor(FLinearColor(0.02f, 0.025f, 0.028f, 0.92f));
-	PanelBorder->SetPadding(FMargin(12.0f));
-	WidgetTree->RootWidget = PanelBorder;
+	PanelBorder->SetBrushColor(PanelColor);
+	PanelBorder->SetPadding(FMargin(14.0f));
+	ColorPickerSize->SetContent(PanelBorder);
 
 	UVerticalBox* RootBox = WidgetTree->ConstructWidget<UVerticalBox>(UVerticalBox::StaticClass(), TEXT("ColorPickerRoot"));
 	PanelBorder->SetContent(RootBox);
 
-	USizeBox* PreviewSizeBox = WidgetTree->ConstructWidget<USizeBox>(USizeBox::StaticClass(), TEXT("PreviewSize"));
-	PreviewSizeBox->SetHeightOverride(30.0f);
-	PreviewBorder = WidgetTree->ConstructWidget<UBorder>(UBorder::StaticClass(), TEXT("ColorPreview"));
-	PreviewSizeBox->SetContent(PreviewBorder);
-	RootBox->AddChildToVerticalBox(PreviewSizeBox);
+	UTextBlock* TitleText = MakeLabel(FText::FromString(TEXT("Paint")), 31.0f);
+	if (UVerticalBoxSlot* TitleSlot = RootBox->AddChildToVerticalBox(TitleText))
+	{
+		TitleSlot->SetPadding(FMargin(0.0f, 0.0f, 0.0f, 10.0f));
+	}
 
+	USizeBox* PreviewSizeBox = WidgetTree->ConstructWidget<USizeBox>(USizeBox::StaticClass(), TEXT("PreviewSize"));
+	PreviewSizeBox->SetHeightOverride(44.0f);
+	PreviewBorder = WidgetTree->ConstructWidget<UBorder>(UBorder::StaticClass(), TEXT("ColorPreview"));
+	PreviewBorder->SetBrushColor(SelectedColor);
+	PreviewSizeBox->SetContent(PreviewBorder);
+	if (UVerticalBoxSlot* PreviewSlot = RootBox->AddChildToVerticalBox(PreviewSizeBox))
+	{
+		PreviewSlot->SetPadding(FMargin(0.0f, 0.0f, 0.0f, 14.0f));
+	}
+
+	UHorizontalBox* PickerAndHistoryRow = WidgetTree->ConstructWidget<UHorizontalBox>(UHorizontalBox::StaticClass(), TEXT("PickerAndHistoryRow"));
+	USizeBox* WheelSize = WidgetTree->ConstructWidget<USizeBox>(USizeBox::StaticClass(), TEXT("HSVWheelSize"));
+	WheelSize->SetWidthOverride(226.0f);
+	WheelSize->SetHeightOverride(226.0f);
+	HSVWheel = WidgetTree->ConstructWidget<UChameleonHSVColorWheelWidget>(UChameleonHSVColorWheelWidget::StaticClass(), TEXT("HSVWheel"));
+	HSVWheel->SetSelectedColor(SelectedColor);
+	WheelSize->SetContent(HSVWheel);
+	if (UHorizontalBoxSlot* WheelSlot = PickerAndHistoryRow->AddChildToHorizontalBox(WheelSize))
+	{
+		WheelSlot->SetPadding(FMargin(0.0f, 0.0f, 14.0f, 0.0f));
+	}
+
+	UBorder* HistoryBorder = WidgetTree->ConstructWidget<UBorder>(UBorder::StaticClass(), TEXT("HistoryPanel"));
+	HistoryBorder->SetBrushColor(GroupColor);
+	HistoryBorder->SetPadding(FMargin(10.0f));
+	UVerticalBox* HistoryBox = WidgetTree->ConstructWidget<UVerticalBox>(UVerticalBox::StaticClass(), TEXT("HistoryBox"));
+	HistoryBorder->SetContent(HistoryBox);
+	HistoryBox->AddChildToVerticalBox(MakeLabel(FText::FromString(TEXT("History")), 18.0f));
+	for (int32 RowIndex = 0; RowIndex < 2; ++RowIndex)
+	{
+		UHorizontalBox* HistoryRow = WidgetTree->ConstructWidget<UHorizontalBox>(
+			UHorizontalBox::StaticClass(),
+			FName(*FString::Printf(TEXT("HistoryRow%d"), RowIndex)));
+		for (int32 ColumnIndex = 0; ColumnIndex < 5; ++ColumnIndex)
+		{
+			const int32 HistoryIndex = RowIndex * 5 + ColumnIndex;
+			USizeBox* SwatchSize = WidgetTree->ConstructWidget<USizeBox>(
+				USizeBox::StaticClass(),
+				FName(*FString::Printf(TEXT("HistorySwatchSize%d"), HistoryIndex)));
+			SwatchSize->SetWidthOverride(38.0f);
+			SwatchSize->SetHeightOverride(38.0f);
+			SwatchSize->SetContent(MakeHistoryButton(FName(*FString::Printf(TEXT("HistorySwatch%d"), HistoryIndex)), HistoryIndex));
+			if (UHorizontalBoxSlot* SwatchSlot = HistoryRow->AddChildToHorizontalBox(SwatchSize))
+			{
+				SwatchSlot->SetPadding(FMargin(0.0f, 7.0f, 7.0f, 0.0f));
+			}
+		}
+		HistoryBox->AddChildToVerticalBox(HistoryRow);
+	}
+	if (UHorizontalBoxSlot* HistorySlot = PickerAndHistoryRow->AddChildToHorizontalBox(HistoryBorder))
+	{
+		HistorySlot->SetPadding(FMargin(0.0f));
+	}
+	if (UVerticalBoxSlot* PickerRowSlot = RootBox->AddChildToVerticalBox(PickerAndHistoryRow))
+	{
+		PickerRowSlot->SetPadding(FMargin(0.0f, 0.0f, 0.0f, 12.0f));
+	}
+
+	UBorder* SwatchesBorder = WidgetTree->ConstructWidget<UBorder>(UBorder::StaticClass(), TEXT("SwatchesPanel"));
+	SwatchesBorder->SetBrushColor(GroupColor);
+	SwatchesBorder->SetPadding(FMargin(10.0f, 8.0f));
+	UVerticalBox* SwatchesBox = WidgetTree->ConstructWidget<UVerticalBox>(UVerticalBox::StaticClass(), TEXT("SwatchesBox"));
+	SwatchesBorder->SetContent(SwatchesBox);
+	SwatchesBox->AddChildToVerticalBox(MakeLabel(FText::FromString(TEXT("Swatches")), 17.0f));
 	UHorizontalBox* SwatchRow = WidgetTree->ConstructWidget<UHorizontalBox>(UHorizontalBox::StaticClass(), TEXT("Swatches"));
 	for (int32 Index = 0; Index < SwatchColors.Num(); ++Index)
 	{
-		USizeBox* SwatchSizeBox = WidgetTree->ConstructWidget<USizeBox>(USizeBox::StaticClass());
-		SwatchSizeBox->SetWidthOverride(26.0f);
-		SwatchSizeBox->SetHeightOverride(26.0f);
+		const bool bLargeSwatch = Index == 8 || Index == 9;
+		USizeBox* SwatchSizeBox = WidgetTree->ConstructWidget<USizeBox>(
+			USizeBox::StaticClass(),
+			FName(*FString::Printf(TEXT("SwatchSize%d"), Index)));
+		SwatchSizeBox->SetWidthOverride(bLargeSwatch ? 54.0f : 30.0f);
+		SwatchSizeBox->SetHeightOverride(bLargeSwatch ? 54.0f : 30.0f);
 		SwatchSizeBox->SetContent(MakeSwatchButton(FName(*FString::Printf(TEXT("Swatch%d"), Index)), Index));
-		SwatchRow->AddChildToHorizontalBox(SwatchSizeBox);
+		if (UHorizontalBoxSlot* SwatchSlot = SwatchRow->AddChildToHorizontalBox(SwatchSizeBox))
+		{
+			SwatchSlot->SetPadding(FMargin(0.0f, 7.0f, 6.0f, 0.0f));
+		}
 	}
-	RootBox->AddChildToVerticalBox(SwatchRow);
-
-	auto AddSliderRow = [this, RootBox](const FText& Label, const FName& SliderName) -> USlider*
+	SwatchesBox->AddChildToVerticalBox(SwatchRow);
+	if (UVerticalBoxSlot* SwatchesSlot = RootBox->AddChildToVerticalBox(SwatchesBorder))
 	{
-		UHorizontalBox* Row = WidgetTree->ConstructWidget<UHorizontalBox>(UHorizontalBox::StaticClass());
+		SwatchesSlot->SetPadding(FMargin(0.0f, 0.0f, 0.0f, 12.0f));
+	}
+
+	UBorder* ColorSlidersBorder = WidgetTree->ConstructWidget<UBorder>(UBorder::StaticClass(), TEXT("ColorSlidersPanel"));
+	ColorSlidersBorder->SetBrushColor(GroupColor);
+	ColorSlidersBorder->SetPadding(FMargin(10.0f));
+	UHorizontalBox* SliderColumns = WidgetTree->ConstructWidget<UHorizontalBox>(UHorizontalBox::StaticClass(), TEXT("SliderColumns"));
+	ColorSlidersBorder->SetContent(SliderColumns);
+	UVerticalBox* RGBColumn = WidgetTree->ConstructWidget<UVerticalBox>(UVerticalBox::StaticClass(), TEXT("RGBColumn"));
+	UVerticalBox* HSVColumn = WidgetTree->ConstructWidget<UVerticalBox>(UVerticalBox::StaticClass(), TEXT("HSVColumn"));
+
+	auto AddSliderRow = [this](UVerticalBox* Parent, const FText& Label, const FName& SliderName, const FName& ValueBoxName, float SliderValue, const FLinearColor& Accent) -> TPair<USlider*, USpinBox*>
+	{
+		UHorizontalBox* Row = WidgetTree->ConstructWidget<UHorizontalBox>(
+			UHorizontalBox::StaticClass(),
+			FName(*FString::Printf(TEXT("%sRow"), *SliderName.ToString())));
 		USizeBox* LabelSizeBox = WidgetTree->ConstructWidget<USizeBox>(USizeBox::StaticClass());
-		LabelSizeBox->SetWidthOverride(34.0f);
-		LabelSizeBox->SetContent(MakeLabel(Label));
+		LabelSizeBox->SetWidthOverride(28.0f);
+		LabelSizeBox->SetContent(MakeLabel(Label, 18.0f));
 		Row->AddChildToHorizontalBox(LabelSizeBox);
 
-		USlider* Slider = MakeSlider(SliderName, 0.0f);
-		Row->AddChildToHorizontalBox(Slider);
-		RootBox->AddChildToVerticalBox(Row);
-		return Slider;
+		USizeBox* SliderSizeBox = WidgetTree->ConstructWidget<USizeBox>(USizeBox::StaticClass());
+		SliderSizeBox->SetWidthOverride(136.0f);
+		USlider* Slider = MakeSlider(SliderName, SliderValue, Accent);
+		SliderSizeBox->SetContent(Slider);
+		if (UHorizontalBoxSlot* SliderSlot = Row->AddChildToHorizontalBox(SliderSizeBox))
+		{
+			SliderSlot->SetPadding(FMargin(0.0f, 0.0f, 8.0f, 0.0f));
+		}
+
+		USizeBox* ValueSizeBox = WidgetTree->ConstructWidget<USizeBox>(USizeBox::StaticClass());
+		ValueSizeBox->SetWidthOverride(56.0f);
+		USpinBox* ValueBox = MakeValueBox(ValueBoxName, UnitToByte(SliderValue));
+		ValueSizeBox->SetContent(ValueBox);
+		Row->AddChildToHorizontalBox(ValueSizeBox);
+
+		if (UVerticalBoxSlot* RowSlot = Parent->AddChildToVerticalBox(Row))
+		{
+			RowSlot->SetPadding(FMargin(0.0f, 0.0f, 0.0f, 7.0f));
+		}
+
+		return TPair<USlider*, USpinBox*>(Slider, ValueBox);
 	};
 
-	RedSlider = AddSliderRow(FText::FromString(TEXT("R")), TEXT("RedSlider"));
-	GreenSlider = AddSliderRow(FText::FromString(TEXT("G")), TEXT("GreenSlider"));
-	BlueSlider = AddSliderRow(FText::FromString(TEXT("B")), TEXT("BlueSlider"));
-	RoughnessSlider = AddSliderRow(FText::FromString(TEXT("Rgh")), TEXT("RoughnessSlider"));
-	MetallicSlider = AddSliderRow(FText::FromString(TEXT("Met")), TEXT("MetallicSlider"));
+	const TPair<USlider*, USpinBox*> RedControls = AddSliderRow(RGBColumn, FText::FromString(TEXT("R")), TEXT("RedSlider"), TEXT("RedValueBox"), SelectedColor.R, FLinearColor(1.0f, 0.06f, 0.04f, 1.0f));
+	RedSlider = RedControls.Key;
+	RedValueBox = RedControls.Value;
+	const TPair<USlider*, USpinBox*> GreenControls = AddSliderRow(RGBColumn, FText::FromString(TEXT("G")), TEXT("GreenSlider"), TEXT("GreenValueBox"), SelectedColor.G, FLinearColor(0.0f, 0.9f, 0.05f, 1.0f));
+	GreenSlider = GreenControls.Key;
+	GreenValueBox = GreenControls.Value;
+	const TPair<USlider*, USpinBox*> BlueControls = AddSliderRow(RGBColumn, FText::FromString(TEXT("B")), TEXT("BlueSlider"), TEXT("BlueValueBox"), SelectedColor.B, FLinearColor(0.02f, 0.12f, 1.0f, 1.0f));
+	BlueSlider = BlueControls.Key;
+	BlueValueBox = BlueControls.Value;
 
-	if (RedSlider)
+	float Hue = 0.0f;
+	float Saturation = 0.0f;
+	float ColorValue = 0.0f;
+	GetSelectedHSV(Hue, Saturation, ColorValue);
+	const TPair<USlider*, USpinBox*> HueControls = AddSliderRow(HSVColumn, FText::FromString(TEXT("H")), TEXT("HueSlider"), TEXT("HueValueBox"), Hue, FLinearColor(1.0f, 0.25f, 0.0f, 1.0f));
+	HueSlider = HueControls.Key;
+	HueValueBox = HueControls.Value;
+	const TPair<USlider*, USpinBox*> SaturationControls = AddSliderRow(HSVColumn, FText::FromString(TEXT("S")), TEXT("SaturationSlider"), TEXT("SaturationValueBox"), Saturation, FLinearColor(1.0f, 0.36f, 0.18f, 1.0f));
+	SaturationSlider = SaturationControls.Key;
+	SaturationValueBox = SaturationControls.Value;
+	const TPair<USlider*, USpinBox*> ValueControls = AddSliderRow(HSVColumn, FText::FromString(TEXT("V")), TEXT("ValueSlider"), TEXT("ValueValueBox"), ColorValue, FLinearColor(0.9f, 0.34f, 0.0f, 1.0f));
+	ValueSlider = ValueControls.Key;
+	ValueValueBox = ValueControls.Value;
+
+	if (UHorizontalBoxSlot* RGBSlot = SliderColumns->AddChildToHorizontalBox(RGBColumn))
 	{
-		RedSlider->OnValueChanged.AddDynamic(this, &UChameleonColorPickerWidget::HandleRedChanged);
+		RGBSlot->SetPadding(FMargin(0.0f, 0.0f, 12.0f, 0.0f));
 	}
-	if (GreenSlider)
+	SliderColumns->AddChildToHorizontalBox(HSVColumn);
+	if (UVerticalBoxSlot* ColorSlidersSlot = RootBox->AddChildToVerticalBox(ColorSlidersBorder))
 	{
-		GreenSlider->OnValueChanged.AddDynamic(this, &UChameleonColorPickerWidget::HandleGreenChanged);
+		ColorSlidersSlot->SetPadding(FMargin(0.0f, 0.0f, 0.0f, 12.0f));
 	}
-	if (BlueSlider)
+
+	UBorder* MaterialBorder = WidgetTree->ConstructWidget<UBorder>(UBorder::StaticClass(), TEXT("MaterialPanel"));
+	MaterialBorder->SetBrushColor(GroupColor);
+	MaterialBorder->SetPadding(FMargin(10.0f));
+	UVerticalBox* MaterialBox = WidgetTree->ConstructWidget<UVerticalBox>(UVerticalBox::StaticClass(), TEXT("MaterialBox"));
+	MaterialBorder->SetContent(MaterialBox);
+	auto AddMaterialRow = [this, MaterialBox](const FText& Label, const FName& SliderName, const FName& ValueBoxName, float SliderValue) -> TPair<USlider*, USpinBox*>
 	{
-		BlueSlider->OnValueChanged.AddDynamic(this, &UChameleonColorPickerWidget::HandleBlueChanged);
-	}
-	if (RoughnessSlider)
+		UHorizontalBox* Row = WidgetTree->ConstructWidget<UHorizontalBox>(
+			UHorizontalBox::StaticClass(),
+			FName(*FString::Printf(TEXT("%sRow"), *SliderName.ToString())));
+		USizeBox* LabelSizeBox = WidgetTree->ConstructWidget<USizeBox>(USizeBox::StaticClass());
+		LabelSizeBox->SetWidthOverride(52.0f);
+		LabelSizeBox->SetContent(MakeLabel(Label, 18.0f));
+		Row->AddChildToHorizontalBox(LabelSizeBox);
+
+		USizeBox* SliderSizeBox = WidgetTree->ConstructWidget<USizeBox>(USizeBox::StaticClass());
+		SliderSizeBox->SetWidthOverride(342.0f);
+		USlider* Slider = MakeSlider(SliderName, SliderValue, MutedTrackColor);
+		SliderSizeBox->SetContent(Slider);
+		if (UHorizontalBoxSlot* SliderSlot = Row->AddChildToHorizontalBox(SliderSizeBox))
+		{
+			SliderSlot->SetPadding(FMargin(0.0f, 0.0f, 10.0f, 0.0f));
+		}
+
+		USizeBox* ValueSizeBox = WidgetTree->ConstructWidget<USizeBox>(USizeBox::StaticClass());
+		ValueSizeBox->SetWidthOverride(60.0f);
+		USpinBox* ValueBox = MakeValueBox(ValueBoxName, UnitToByte(SliderValue));
+		ValueSizeBox->SetContent(ValueBox);
+		Row->AddChildToHorizontalBox(ValueSizeBox);
+		if (UVerticalBoxSlot* RowSlot = MaterialBox->AddChildToVerticalBox(Row))
+		{
+			RowSlot->SetPadding(FMargin(0.0f, 0.0f, 0.0f, 7.0f));
+		}
+
+		return TPair<USlider*, USpinBox*>(Slider, ValueBox);
+	};
+	const TPair<USlider*, USpinBox*> RoughnessControls = AddMaterialRow(FText::FromString(TEXT("Rgh")), TEXT("RoughnessSlider"), TEXT("RoughnessValueBox"), SelectedRoughness);
+	RoughnessSlider = RoughnessControls.Key;
+	RoughnessValueBox = RoughnessControls.Value;
+	const TPair<USlider*, USpinBox*> MetallicControls = AddMaterialRow(FText::FromString(TEXT("Met")), TEXT("MetallicSlider"), TEXT("MetallicValueBox"), SelectedMetallic);
+	MetallicSlider = MetallicControls.Key;
+	MetallicValueBox = MetallicControls.Value;
+	if (UVerticalBoxSlot* MaterialSlot = RootBox->AddChildToVerticalBox(MaterialBorder))
 	{
-		RoughnessSlider->OnValueChanged.AddDynamic(this, &UChameleonColorPickerWidget::HandleRoughnessChanged);
-	}
-	if (MetallicSlider)
-	{
-		MetallicSlider->OnValueChanged.AddDynamic(this, &UChameleonColorPickerWidget::HandleMetallicChanged);
+		MaterialSlot->SetPadding(FMargin(0.0f, 0.0f, 0.0f, 14.0f));
 	}
 
 	CommitButton = WidgetTree->ConstructWidget<UButton>(UButton::StaticClass(), TEXT("CommitButton"));
-	CommitButton->SetContent(MakeLabel(FText::FromString(TEXT("Apply"))));
-	CommitButton->OnClicked.AddDynamic(this, &UChameleonColorPickerWidget::HandleCommitClicked);
-	RootBox->AddChildToVerticalBox(CommitButton);
+	CommitButton->SetBackgroundColor(FLinearColor(0.02f, 0.22f, 0.52f, 1.0f));
+	CommitButton->SetContent(MakeLabel(FText::FromString(TEXT("Apply")), 28.0f));
+	USizeBox* CommitSize = WidgetTree->ConstructWidget<USizeBox>(USizeBox::StaticClass(), TEXT("CommitSize"));
+	CommitSize->SetHeightOverride(54.0f);
+	CommitSize->SetContent(CommitButton);
+	RootBox->AddChildToVerticalBox(CommitSize);
 }
 
 void UChameleonColorPickerWidget::ApplySelectedColor(bool bBroadcast, bool bCommit)
@@ -427,9 +883,18 @@ void UChameleonColorPickerWidget::UpdateControlsFromSelectedColor()
 {
 	TGuardValue<bool> UpdatingGuard(bUpdatingControls, true);
 
+	float Hue = 0.0f;
+	float Saturation = 0.0f;
+	float ColorValue = 0.0f;
+	GetSelectedHSV(Hue, Saturation, ColorValue);
+
 	if (PreviewBorder)
 	{
 		PreviewBorder->SetBrushColor(SelectedColor);
+	}
+	if (HSVWheel)
+	{
+		HSVWheel->SetSelectedColor(SelectedColor);
 	}
 	if (RedSlider)
 	{
@@ -443,6 +908,18 @@ void UChameleonColorPickerWidget::UpdateControlsFromSelectedColor()
 	{
 		BlueSlider->SetValue(SelectedColor.B);
 	}
+	if (HueSlider)
+	{
+		HueSlider->SetValue(Hue);
+	}
+	if (SaturationSlider)
+	{
+		SaturationSlider->SetValue(Saturation);
+	}
+	if (ValueSlider)
+	{
+		ValueSlider->SetValue(ColorValue);
+	}
 	if (RoughnessSlider)
 	{
 		RoughnessSlider->SetValue(SelectedRoughness);
@@ -451,6 +928,76 @@ void UChameleonColorPickerWidget::UpdateControlsFromSelectedColor()
 	{
 		MetallicSlider->SetValue(SelectedMetallic);
 	}
+
+	if (RedValueBox)
+	{
+		RedValueBox->SetValue(UnitToByte(SelectedColor.R));
+	}
+	if (GreenValueBox)
+	{
+		GreenValueBox->SetValue(UnitToByte(SelectedColor.G));
+	}
+	if (BlueValueBox)
+	{
+		BlueValueBox->SetValue(UnitToByte(SelectedColor.B));
+	}
+	if (HueValueBox)
+	{
+		HueValueBox->SetValue(UnitToByte(Hue));
+	}
+	if (SaturationValueBox)
+	{
+		SaturationValueBox->SetValue(UnitToByte(Saturation));
+	}
+	if (ValueValueBox)
+	{
+		ValueValueBox->SetValue(UnitToByte(ColorValue));
+	}
+	if (RoughnessValueBox)
+	{
+		RoughnessValueBox->SetValue(UnitToByte(SelectedRoughness));
+	}
+	if (MetallicValueBox)
+	{
+		MetallicValueBox->SetValue(UnitToByte(SelectedMetallic));
+	}
+}
+
+void UChameleonColorPickerWidget::UpdateHistoryButtons()
+{
+	if (!WidgetTree)
+	{
+		return;
+	}
+
+	for (int32 Index = 0; Index < ColorHistoryCount; ++Index)
+	{
+		if (UButton* HistoryButton = Cast<UButton>(WidgetTree->FindWidget(FName(*FString::Printf(TEXT("HistorySwatch%d"), Index)))))
+		{
+			const FLinearColor HistoryColor = ColorHistory.IsValidIndex(Index) ? ColorHistory[Index] : FLinearColor(0.08f, 0.08f, 0.08f, 1.0f);
+			HistoryButton->SetBackgroundColor(HistoryColor);
+		}
+	}
+}
+
+void UChameleonColorPickerWidget::RecordHistoryColor(FLinearColor NewColor)
+{
+	NewColor = ClampColor(NewColor);
+	for (int32 Index = ColorHistory.Num() - 1; Index >= 0; --Index)
+	{
+		if (ColorHistory[Index].Equals(NewColor, 0.002f))
+		{
+			ColorHistory.RemoveAt(Index);
+		}
+	}
+
+	ColorHistory.Insert(NewColor, 0);
+	while (ColorHistory.Num() > ColorHistoryCount)
+	{
+		ColorHistory.RemoveAt(ColorHistory.Num() - 1);
+	}
+
+	UpdateHistoryButtons();
 }
 
 void UChameleonColorPickerWidget::ChooseSwatch(int32 SwatchIndex)
@@ -461,18 +1008,63 @@ void UChameleonColorPickerWidget::ChooseSwatch(int32 SwatchIndex)
 	}
 }
 
-UTextBlock* UChameleonColorPickerWidget::MakeLabel(const FText& Text)
+void UChameleonColorPickerWidget::ChooseHistory(int32 HistoryIndex)
+{
+	if (ColorHistory.IsValidIndex(HistoryIndex))
+	{
+		SetSelectedColor(ColorHistory[HistoryIndex], true);
+	}
+}
+
+void UChameleonColorPickerWidget::GetSelectedHSV(float& OutHue, float& OutSaturation, float& OutValue) const
+{
+	const FLinearColor HSV = ClampColor(SelectedColor).LinearRGBToHSV();
+	OutHue = ClampUnit(HSV.R / 360.0f);
+	OutSaturation = ClampUnit(HSV.G);
+	OutValue = ClampUnit(HSV.B);
+}
+
+void UChameleonColorPickerWidget::SetSelectedColorFromHSV(float Hue, float Saturation, float Value, bool bBroadcast)
+{
+	SelectedColor = MakeHSVColor(Hue, Saturation, Value);
+	ApplySelectedColor(bBroadcast, false);
+	UpdateControlsFromSelectedColor();
+}
+
+UTextBlock* UChameleonColorPickerWidget::MakeLabel(const FText& Text, float FontSize)
 {
 	UTextBlock* Label = WidgetTree->ConstructWidget<UTextBlock>(UTextBlock::StaticClass());
 	Label->SetText(Text);
+	Label->SetColorAndOpacity(FSlateColor(TextColor));
+	FSlateFontInfo Font = Label->GetFont();
+	Font.Size = FMath::RoundToInt(FontSize);
+	Label->SetFont(Font);
+	Label->SetShadowOffset(FVector2D(1.0f, 1.0f));
+	Label->SetShadowColorAndOpacity(FLinearColor(0.0f, 0.0f, 0.0f, 0.55f));
 	return Label;
 }
 
-USlider* UChameleonColorPickerWidget::MakeSlider(const FName& Name, float Value)
+USlider* UChameleonColorPickerWidget::MakeSlider(const FName& Name, float Value, const FLinearColor& AccentColor)
 {
 	USlider* Slider = WidgetTree->ConstructWidget<USlider>(USlider::StaticClass(), Name);
-	Slider->SetValue(Value);
+	Slider->SetValue(ClampUnit(Value));
+	ApplySliderAccent(Slider, AccentColor);
 	return Slider;
+}
+
+USpinBox* UChameleonColorPickerWidget::MakeValueBox(const FName& Name, float Value)
+{
+	USpinBox* ValueBox = WidgetTree->ConstructWidget<USpinBox>(USpinBox::StaticClass(), Name);
+	ValueBox->SetMinValue(0.0f);
+	ValueBox->SetMaxValue(255.0f);
+	ValueBox->SetMinSliderValue(0.0f);
+	ValueBox->SetMaxSliderValue(255.0f);
+	ValueBox->SetDelta(1.0f);
+	ValueBox->SetMinFractionalDigits(0);
+	ValueBox->SetMaxFractionalDigits(0);
+	ValueBox->SetValue(FMath::Clamp(Value, 0.0f, 255.0f));
+	ValueBox->SetForegroundColor(FSlateColor(TextColor));
+	return ValueBox;
 }
 
 UButton* UChameleonColorPickerWidget::MakeSwatchButton(const FName& Name, int32 SwatchIndex)
@@ -480,45 +1072,15 @@ UButton* UChameleonColorPickerWidget::MakeSwatchButton(const FName& Name, int32 
 	UButton* SwatchButton = WidgetTree->ConstructWidget<UButton>(UButton::StaticClass(), Name);
 	const FLinearColor SwatchColor = SwatchColors.IsValidIndex(SwatchIndex) ? SwatchColors[SwatchIndex] : FLinearColor::Black;
 	SwatchButton->SetBackgroundColor(SwatchColor);
-
-	switch (SwatchIndex)
-	{
-	case 0:
-		SwatchButton->OnClicked.AddDynamic(this, &UChameleonColorPickerWidget::HandleSwatch0Clicked);
-		break;
-	case 1:
-		SwatchButton->OnClicked.AddDynamic(this, &UChameleonColorPickerWidget::HandleSwatch1Clicked);
-		break;
-	case 2:
-		SwatchButton->OnClicked.AddDynamic(this, &UChameleonColorPickerWidget::HandleSwatch2Clicked);
-		break;
-	case 3:
-		SwatchButton->OnClicked.AddDynamic(this, &UChameleonColorPickerWidget::HandleSwatch3Clicked);
-		break;
-	case 4:
-		SwatchButton->OnClicked.AddDynamic(this, &UChameleonColorPickerWidget::HandleSwatch4Clicked);
-		break;
-	case 5:
-		SwatchButton->OnClicked.AddDynamic(this, &UChameleonColorPickerWidget::HandleSwatch5Clicked);
-		break;
-	case 6:
-		SwatchButton->OnClicked.AddDynamic(this, &UChameleonColorPickerWidget::HandleSwatch6Clicked);
-		break;
-	case 7:
-		SwatchButton->OnClicked.AddDynamic(this, &UChameleonColorPickerWidget::HandleSwatch7Clicked);
-		break;
-	case 8:
-		SwatchButton->OnClicked.AddDynamic(this, &UChameleonColorPickerWidget::HandleSwatch8Clicked);
-		break;
-	case 9:
-		SwatchButton->OnClicked.AddDynamic(this, &UChameleonColorPickerWidget::HandleSwatch9Clicked);
-		break;
-	case 10:
-		SwatchButton->OnClicked.AddDynamic(this, &UChameleonColorPickerWidget::HandleSwatch10Clicked);
-		break;
-	default:
-		break;
-	}
-
+	BindSwatchButton(Name, SwatchIndex);
 	return SwatchButton;
+}
+
+UButton* UChameleonColorPickerWidget::MakeHistoryButton(const FName& Name, int32 HistoryIndex)
+{
+	UButton* HistoryButton = WidgetTree->ConstructWidget<UButton>(UButton::StaticClass(), Name);
+	const FLinearColor HistoryColor = ColorHistory.IsValidIndex(HistoryIndex) ? ColorHistory[HistoryIndex] : FLinearColor(0.08f, 0.08f, 0.08f, 1.0f);
+	HistoryButton->SetBackgroundColor(HistoryColor);
+	BindHistoryButton(Name, HistoryIndex);
+	return HistoryButton;
 }

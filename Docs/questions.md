@@ -70,3 +70,8 @@
 
 - 질문: 캐릭터가 체크무늬로 보이는 이유가 무엇인가?
 - 답변: `M_CPT_HiderPaint`가 머티리얼 컴파일에 실패해 UE 기본 체크무늬 머티리얼로 대체되고 있었다. 처음에는 Roughness/Metallic `ComponentMask` 입력 누락이 원인이었고, 이후 기본 White/Black 텍스처와 `Linear Color` 샘플러 타입 불일치가 남아 있었다. `R` 채널 직접 연결과 `SAMPLERTYPE_Color` 적용 후 최신 에디터 로그에서 해당 머티리얼 컴파일 경고가 사라졌다.
+
+## 2026-07-09 14:50:30 (소요시간: 00:10:32)
+
+- 질문: F 키를 눌러도 위젯이 보이지 않는데, 위젯 트리를 WBP에 직접 구현한 것이 맞는가?
+- 답변: 이전 구현은 맞지 않았다. 캐릭터 BP가 네이티브 `UChameleonColorPickerWidget` 클래스를 직접 쓰도록 우회했고, 기존 `WBP_ChameleonColorPicker` 트리는 새 목업 구조로 재생성되지 않았다. 수정 후 커맨드렛이 `WBP_ChameleonColorPicker`의 WidgetTree를 직접 새 UI로 재생성하고, 캐릭터 BP도 `WBP_ChameleonColorPicker_C`를 참조하도록 되돌렸다.

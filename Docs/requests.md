@@ -247,3 +247,31 @@
 - `HideSeekEditor Win64 Development` 빌드가 성공했다.
 - `ChameleonPainterBuildTestContent` 커맨드렛을 재실행해 `M_CPT_PaintSpray` 및 캐릭터 BP 기본값을 저장했고, 최종 결과는 0 errors 및 기존 procedural mesh degenerate triangle warning 2건이었다.
 - `HideSeek/HideSeek.uproject`를 Unreal Editor로 다시 실행했고, 최신 로그에서 `M_CPT_PaintSpray`, `M_CPT_HiderPaint`, 머티리얼 컴파일 실패, 스택 오버플로우 관련 오류가 재발하지 않음을 확인했다.
+
+## 2026-07-09 14:15:30 (소요시간: 00:03:10)
+
+- 페인트 모드 좌측 UI 목업을 imagegen으로 갱신했다.
+- 히스토리 팔렛, 원형 HSV 피커, 큰 흑/백 스와치, RGB/HSV 숫자 입력칸, Roughness/Metallic 슬라이더가 포함된 게임 HUD형 레이아웃을 제안했다.
+
+## 2026-07-09 14:29:58 (소요시간: 00:16:35)
+
+- 목업 기준으로 페인트 모드 좌측 UI 구현을 시작해 네이티브 `UChameleonColorPickerWidget` 레이아웃을 520x700 패널로 재구성했다.
+- 원형 HSV 피커용 `UChameleonHSVColorWheelWidget`/Slate 위젯을 추가해 색상환과 SV 영역을 직접 그리고, 마우스 클릭/드래그로 색을 변경할 수 있게 했다.
+- 현재 색상 프리뷰, 히스토리 팔렛, 프리셋 스와치, 큰 흑/백 스와치, RGB/HSV 슬라이더와 0~255 숫자칸, Roughness/Metallic 슬라이더와 숫자칸, Apply 버튼을 배치했다.
+- RGB/HSV 숫자 입력은 UI에서는 0~255로 표시하되 내부 페인트 색상 값은 기존 0~1 범위를 유지하도록 변환했다.
+- `AChameleonHiderCharacter`의 컬러 피커 뷰포트 크기를 520x700으로 늘리고, 커맨드렛이 캐릭터 BP의 `ColorPickerWidgetClass`를 새 네이티브 위젯 클래스로 저장하도록 변경했다.
+- `HideSeekEditor Win64 Development` 빌드가 성공했다.
+- `ChameleonPainterBuildTestContent` 커맨드렛을 실행해 에셋을 저장했고, 결과는 0 errors 및 기존 procedural mesh degenerate triangle warning 2건이었다.
+- `HideSeek/HideSeek.uproject`를 Unreal Editor로 실행했으며, 최신 로그에서 새 UI/머티리얼 컴파일 실패나 Fatal 오류가 재발하지 않음을 확인했다.
+
+## 2026-07-09 14:50:30 (소요시간: 00:10:32)
+
+- F 키를 눌러도 페인트 UI가 보이지 않는 문제를 확인하고, 이전 구현이 `WBP_ChameleonColorPicker` 트리를 직접 갱신하지 않고 네이티브 위젯 클래스로 우회하던 점을 수정했다.
+- `ChameleonPainterBuildTestContent` 커맨드렛이 `WBP_ChameleonColorPicker`의 WidgetTree를 항상 새 페인트 UI 구조로 재생성하도록 변경했다.
+- WBP 트리에는 `HSVWheel`, `HistorySwatch0~9`, 큰 흑/백 스와치, RGB/HSV 슬라이더와 0~255 `SpinBox`, Roughness/Metallic 슬라이더와 숫자칸, Apply 버튼이 직접 저장되도록 했다.
+- 기존 WBP 트리를 교체할 때 남아 있던 `WidgetVariableNameToGuidMap` 때문에 UMG 컴파일 ensure가 발생하던 문제를 맵 초기화로 해결했다.
+- 캐릭터 BP의 `ColorPickerWidgetClass`가 다시 `WBP_ChameleonColorPicker_C`를 참조하도록 되돌렸다.
+- 붓 커서가 우측 하단으로 갈수록 실제 페인트 위치보다 멀리 표시되던 문제를 `SetPositionInViewport(..., true)`로 고쳐 DPI/뷰포트 스케일 변환을 적용했다.
+- `HideSeekEditor Win64 Development` 빌드가 성공했다.
+- `ChameleonPainterBuildTestContent` 커맨드렛을 재실행해 WBP와 캐릭터 BP를 저장했고, 결과는 0 errors 및 기존 procedural mesh degenerate triangle warning 2건이었다.
+- `HideSeek/HideSeek.uproject`를 Unreal Editor로 다시 실행했으며, 최신 로그에서 WBP 컴파일 ensure, Fatal, 새 UI 관련 오류가 재발하지 않음을 확인했다.
