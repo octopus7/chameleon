@@ -320,3 +320,13 @@
 - `Hit.FaceIndex`를 사용할 수 없는 경로에서 animated hit 위치를 가장 가까운 정점 하나로 스냅하던 fallback을 가장 가까운 animated triangle 위 점과 barycentric weight 기반 rest 위치 변환으로 바꿨다.
 - `HideSeekEditor Win64 Development` 빌드가 성공했다.
 - `HideSeek/HideSeek.uproject`를 Unreal Editor로 다시 실행했고, 최신 로그에서 Fatal, ensure, 컴파일 실패가 없음을 확인했다.
+
+## 2026-07-09 15:44:11 (소요시간: 00:06:06)
+
+- 브러시가 너무 넉넉하게 칠해지고 경계가 너무 날카로운 문제를 수정했다.
+- UV 삼각형 전체를 한 번에 칠하던 보정은 유지하지 않고, UV dilation으로 찾은 픽셀을 삼각형 위 closest point로 투영한 뒤 barycentric weight로 rest-space 위치를 복원해 브러시 반경 안쪽 픽셀만 칠하도록 바꿨다.
+- `PaintTextureTriangleDilationPixels` 기본값을 4.0에서 2.0으로 낮춰 얇은 UV 삼각형 구멍 방지 용도로만 쓰이게 했다.
+- `PaintTextureBrushFeatherRatio`를 추가하고 기본값 0.45로 설정해 브러시 외곽부가 거리 기반 알파로 부드럽게 섞이도록 했다.
+- `ChameleonPainterBuildTestContent` 커맨드렛도 새 dilation/feather 기본값을 BP의 `BodyComponent`에 저장하도록 갱신했다.
+- `HideSeekEditor Win64 Development` 빌드가 성공했고, `ChameleonPainterBuildTestContent` 커맨드렛은 0 errors 및 기존 procedural mesh degenerate triangle warning 2건으로 완료됐다.
+- `HideSeek/HideSeek.uproject`를 Unreal Editor로 다시 실행했고, 최신 로그에서 Fatal, ensure, 컴파일 실패가 없음을 확인했다.

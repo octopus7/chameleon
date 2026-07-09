@@ -150,7 +150,10 @@ public:
 	float MinimumPaintBrushRadiusPixels = 2.0f;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Chameleon|Paint|Texture", meta = (ClampMin = "0.0", UIMin = "0.0", UIMax = "12.0"))
-	float PaintTextureTriangleDilationPixels = 4.0f;
+	float PaintTextureTriangleDilationPixels = 2.0f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Chameleon|Paint|Texture", meta = (ClampMin = "0.0", ClampMax = "1.0", UIMin = "0.0", UIMax = "1.0"))
+	float PaintTextureBrushFeatherRatio = 0.45f;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Chameleon|Paint|Texture")
 	TArray<FName> BaseColorTextureParameterNames;

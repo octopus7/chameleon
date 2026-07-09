@@ -1274,6 +1274,8 @@ void ConfigureBlueprints(UChameleonPainterInputConfig* InputConfig, UMaterialInt
 			CharacterCDO->BodyComponent->CamouflageBaseColor = GetDefaultBodyColor();
 			CharacterCDO->BodyComponent->CamouflageBaseRoughness = GetDefaultBrushRoughness();
 			CharacterCDO->BodyComponent->CamouflageBaseMetallic = GetDefaultBrushMetallic();
+			CharacterCDO->BodyComponent->PaintTextureTriangleDilationPixels = 2.0f;
+			CharacterCDO->BodyComponent->PaintTextureBrushFeatherRatio = 0.45f;
 		}
 		if (CharacterCDO->PaintComponent)
 		{

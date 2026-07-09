@@ -707,31 +707,52 @@ float SquaredDistanceToBox(const FVector& Point, const FBox& Box)
 	return Dx * Dx + Dy * Dy + Dz * Dz;
 }
 
-float SquaredDistanceToSegment2D(const FVector2D& Point, const FVector2D& A, const FVector2D& B)
+FVector2D ClosestPointOnSegment2D(const FVector2D& Point, const FVector2D& A, const FVector2D& B)
 {
 	const FVector2D Segment = B - A;
 	const double SegmentLengthSquared = Segment.SizeSquared();
 	if (SegmentLengthSquared <= UE_SMALL_NUMBER)
 	{
-		return FVector2D::DistSquared(Point, A);
+		return A;
 	}
 
 	const double T = FMath::Clamp(FVector2D::DotProduct(Point - A, Segment) / SegmentLengthSquared, 0.0, 1.0);
-	return FVector2D::DistSquared(Point, A + Segment * T);
+	return A + Segment * T;
 }
 
-float SquaredDistanceToTriangle2D(const FVector2D& Point, const FVector2D& A, const FVector2D& B, const FVector2D& C)
+float SquaredDistanceToSegment2D(const FVector2D& Point, const FVector2D& A, const FVector2D& B)
+{
+	return FVector2D::DistSquared(Point, ClosestPointOnSegment2D(Point, A, B));
+}
+
+FVector2D ClosestPointOnTriangle2D(const FVector2D& Point, const FVector2D& A, const FVector2D& B, const FVector2D& C)
 {
 	const FVector Weights = ComputeBarycentricWeights2D(Point, A, B, C);
 	if (Weights.X >= 0.0 && Weights.Y >= 0.0 && Weights.Z >= 0.0)
 	{
-		return 0.0f;
+		return Point;
 	}
 
-	return FMath::Min3(
-		SquaredDistanceToSegment2D(Point, A, B),
-		SquaredDistanceToSegment2D(Point, B, C),
-		SquaredDistanceToSegment2D(Point, C, A));
+	FVector2D ClosestPoint = ClosestPointOnSegment2D(Point, A, B);
+	float BestDistanceSquared = FVector2D::DistSquared(Point, ClosestPoint);
+	const auto TryCandidate = [&Point, &ClosestPoint, &BestDistanceSquared](const FVector2D& Candidate)
+	{
+		const float CandidateDistanceSquared = FVector2D::DistSquared(Point, Candidate);
+		if (CandidateDistanceSquared < BestDistanceSquared)
+		{
+			BestDistanceSquared = CandidateDistanceSquared;
+			ClosestPoint = Candidate;
+		}
+	};
+
+	TryCandidate(ClosestPointOnSegment2D(Point, B, C));
+	TryCandidate(ClosestPointOnSegment2D(Point, C, A));
+	return ClosestPoint;
+}
+
+float SquaredDistanceToTriangle2D(const FVector2D& Point, const FVector2D& A, const FVector2D& B, const FVector2D& C)
+{
+	return FVector2D::DistSquared(Point, ClosestPointOnTriangle2D(Point, A, B, C));
 }
 
 FColor ScalarToPaintPixel(float Value)
@@ -1346,8 +1367,12 @@ bool UChameleonMetaballBodyComponent::ApplyMaterialTextureStrokeLocal(const FCha
 	const float ClampedRoughness = FMath::Clamp(Stroke.Roughness, 0.0f, 1.0f);
 	const float ClampedMetallic = FMath::Clamp(Stroke.Metallic, 0.0f, 1.0f);
 	const float ClampedStrength = FMath::Clamp(Stroke.Strength, 0.0f, 1.0f);
+	const float ClampedFalloff = FMath::Max(Stroke.Falloff, 0.1f);
 	const float RadiusCm = Stroke.RadiusCm;
 	const float RadiusSquared = RadiusCm * RadiusCm;
+	const float FeatherRatio = FMath::Clamp(PaintTextureBrushFeatherRatio, 0.0f, 1.0f);
+	const float InnerRadiusCm = RadiusCm * (1.0f - FeatherRatio);
+	const float FeatherWidthCm = FMath::Max(RadiusCm - InnerRadiusCm, UE_SMALL_NUMBER);
 	const float TextureCoordinateScale = static_cast<float>(PaintTextureSize - 1);
 	const float TriangleDilationPixels = FMath::Max(PaintTextureTriangleDilationPixels, 0.0f);
 	const float TriangleDilationSquared = TriangleDilationPixels * TriangleDilationPixels;
@@ -1393,7 +1418,42 @@ bool UChameleonMetaballBodyComponent::ApplyMaterialTextureStrokeLocal(const FCha
 					continue;
 				}
 
-				const float Alpha = ClampedStrength;
+				const FVector2D TrianglePoint = ClosestPointOnTriangle2D(PixelPoint, UvPixelA, UvPixelB, UvPixelC);
+				const FVector Weights = ComputeBarycentricWeights2D(TrianglePoint, UvPixelA, UvPixelB, UvPixelC);
+				if (Weights.X < -KINDA_SMALL_NUMBER || Weights.Y < -KINDA_SMALL_NUMBER || Weights.Z < -KINDA_SMALL_NUMBER)
+				{
+					continue;
+				}
+
+				const double WeightSum = Weights.X + Weights.Y + Weights.Z;
+				if (FMath::IsNearlyZero(WeightSum))
+				{
+					continue;
+				}
+
+				const double WeightA = FMath::Clamp(Weights.X / WeightSum, 0.0, 1.0);
+				const double WeightB = FMath::Clamp(Weights.Y / WeightSum, 0.0, 1.0);
+				const double WeightC = FMath::Clamp(Weights.Z / WeightSum, 0.0, 1.0);
+				const FVector PixelRestPosition = TriangleCache.RestPositions[0] * WeightA
+					+ TriangleCache.RestPositions[1] * WeightB
+					+ TriangleCache.RestPositions[2] * WeightC;
+				const float DistanceSquared = FVector::DistSquared(PixelRestPosition, Stroke.LocalPositionCm);
+				if (DistanceSquared > RadiusSquared)
+				{
+					continue;
+				}
+
+				float Alpha = ClampedStrength;
+				if (FeatherRatio > 0.0f)
+				{
+					const float DistanceCm = FMath::Sqrt(DistanceSquared);
+					if (DistanceCm > InnerRadiusCm)
+					{
+						const float EdgeAlpha = 1.0f - ((DistanceCm - InnerRadiusCm) / FeatherWidthCm);
+						Alpha *= FMath::Pow(FMath::Clamp(EdgeAlpha, 0.0f, 1.0f), ClampedFalloff);
+					}
+				}
+
 				const int32 PixelIndex = PixelY * PaintTextureSize + PixelX;
 				if (!BaseColorPaintPixels.IsValidIndex(PixelIndex)
 					|| !RoughnessPaintPixels.IsValidIndex(PixelIndex)
