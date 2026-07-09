@@ -330,3 +330,9 @@
 - `ChameleonPainterBuildTestContent` 커맨드렛도 새 dilation/feather 기본값을 BP의 `BodyComponent`에 저장하도록 갱신했다.
 - `HideSeekEditor Win64 Development` 빌드가 성공했고, `ChameleonPainterBuildTestContent` 커맨드렛은 0 errors 및 기존 procedural mesh degenerate triangle warning 2건으로 완료됐다.
 - `HideSeek/HideSeek.uproject`를 Unreal Editor로 다시 실행했고, 최신 로그에서 Fatal, ensure, 컴파일 실패가 없음을 확인했다.
+
+## 2026-07-09 15:54:32 (소요시간: 00:00:38)
+
+- 페인트 모드에 아이드로퍼 추출 모드를 추가하기 위한 구현 계획을 수립했다.
+- 기본 샘플링은 레벨 오브젝트의 원래 색/페인트 텍스처 데이터를 raycast와 UV 기반으로 읽는 방식으로 두고, 추후 최종 화면색 back buffer/readback 샘플링으로 전환 가능한 추상화 구조를 계획했다.
+- imagegen으로 만든 아이드로퍼 아이콘 버튼, 추출 모드 토글, 고정 크기 아이드로퍼 커서, hover 색상 미리보기, 클릭 시 현재 채색 색상 갱신 흐름을 계획 범위에 포함했다.
