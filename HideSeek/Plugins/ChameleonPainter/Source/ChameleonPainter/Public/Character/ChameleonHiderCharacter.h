@@ -5,11 +5,13 @@
 #include "InputActionValue.h"
 #include "ChameleonHiderCharacter.generated.h"
 
+class AChameleonPaintSprayActor;
 class UCameraComponent;
 class UChameleonColorPickerWidget;
 class UChameleonMetaballBodyComponent;
 class UChameleonPainterInputConfig;
 class UChameleonPaintComponent;
+class UMaterialInterface;
 class USpringArmComponent;
 class UUserWidget;
 
@@ -66,8 +68,32 @@ public:
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Chameleon|Paint")
 	FLinearColor CurrentBrushColor = FLinearColor(1.0f, 0.02f, 0.02f, 1.0f);
 
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Chameleon|Paint", meta = (ClampMin = "0.0", ClampMax = "1.0"))
+	float CurrentBrushRoughness = 0.84f;
+
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Chameleon|Paint", meta = (ClampMin = "0.0", ClampMax = "1.0"))
+	float CurrentBrushMetallic = 0.0f;
+
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Chameleon|Paint")
 	TArray<FName> SampleColorParameterNames;
+
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Chameleon|Paint|Effects")
+	TSubclassOf<AChameleonPaintSprayActor> PaintSprayEffectClass;
+
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Chameleon|Paint|Effects")
+	TObjectPtr<UMaterialInterface> PaintSprayMaterial;
+
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Chameleon|Paint|Effects", meta = (ClampMin = "0.05", ClampMax = "2.0"))
+	float PaintSprayLifetimeSeconds = 0.35f;
+
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Chameleon|Paint|Effects", meta = (ClampMin = "1", ClampMax = "128"))
+	int32 PaintSprayParticleCount = 42;
+
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Chameleon|Paint|Effects", meta = (ClampMin = "0.1", ClampMax = "2.0"))
+	float PaintSprayRadiusScale = 0.72f;
+
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Chameleon|Paint|Effects", meta = (ClampMin = "0.0", ClampMax = "0.25"))
+	float PaintSpraySpawnIntervalSeconds = 0.035f;
 
 protected:
 	void Move(const FInputActionValue& Value);
@@ -81,11 +107,15 @@ protected:
 	UFUNCTION()
 	void HandlePickerColorChanged(FLinearColor Color);
 
+	UFUNCTION()
+	void HandlePickerMaterialPropertiesChanged(float Roughness, float Metallic);
+
 private:
 	void AddMappingContext();
 	void BindEnhancedInput(UInputComponent* PlayerInputComponent);
 	bool TraceFromView(float Distance, FHitResult& OutHit, bool bTraceSelfBody) const;
 	bool TrySampleColorFromHit(const FHitResult& Hit, FLinearColor& OutColor) const;
+	void SpawnPaintSprayEffect(const FHitResult& Hit);
 	void EnsureColorPicker();
 	void EnsureBrushCursor();
 	void UpdateBrushCursorPosition();
@@ -102,4 +132,5 @@ private:
 
 	bool bPaintHeld = false;
 	bool bColorPickerVisible = false;
+	double LastPaintSpraySpawnTimeSeconds = -1000.0;
 };

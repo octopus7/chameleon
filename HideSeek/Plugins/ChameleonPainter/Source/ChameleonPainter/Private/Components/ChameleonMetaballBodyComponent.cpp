@@ -1,12 +1,16 @@
 #include "Components/ChameleonMetaballBodyComponent.h"
 
+#include "Engine/Texture2D.h"
 #include "GameFramework/Actor.h"
 #include "Materials/MaterialInstanceDynamic.h"
+#include "TextureResource.h"
 
 namespace
 {
 constexpr double FieldThreshold = 0.62;
 constexpr int32 MaxSkinInfluences = 4;
+constexpr int32 PaintTextureUvColumns = 6;
+constexpr int32 PaintTextureUvRows = 4;
 
 enum class EChameleonProceduralBoneSlot : uint8
 {
@@ -652,6 +656,86 @@ FVector2D ComputeUnwrappedUv(EChameleonUvIsland Island, const FVector& UnitPoint
 {
 	return PackUvIsland(Island, ComputeLocalUvForIsland(Island, UnitPoint));
 }
+
+FVector ComputeBarycentricWeights(const FVector& Point, const FVector& A, const FVector& B, const FVector& C)
+{
+	const FVector V0 = B - A;
+	const FVector V1 = C - A;
+	const FVector V2 = Point - A;
+	const double D00 = FVector::DotProduct(V0, V0);
+	const double D01 = FVector::DotProduct(V0, V1);
+	const double D11 = FVector::DotProduct(V1, V1);
+	const double D20 = FVector::DotProduct(V2, V0);
+	const double D21 = FVector::DotProduct(V2, V1);
+	const double Denominator = D00 * D11 - D01 * D01;
+	if (FMath::IsNearlyZero(Denominator))
+	{
+		return FVector(1.0, 0.0, 0.0);
+	}
+
+	const double V = (D11 * D20 - D01 * D21) / Denominator;
+	const double W = (D00 * D21 - D01 * D20) / Denominator;
+	const double U = 1.0 - V - W;
+	return FVector(U, V, W);
+}
+
+FColor ScalarToPaintPixel(float Value)
+{
+	const uint8 QuantizedValue = static_cast<uint8>(FMath::RoundToInt(FMath::Clamp(Value, 0.0f, 1.0f) * 255.0f));
+	return FColor(QuantizedValue, QuantizedValue, QuantizedValue, 255);
+}
+
+float PaintPixelToScalar(FColor Pixel)
+{
+	return static_cast<float>(Pixel.R) / 255.0f;
+}
+
+UTexture2D* CreateTransientPaintTexture(int32 TextureSize, const FName& TextureName, bool bSRGB)
+{
+	UTexture2D* Texture = UTexture2D::CreateTransient(TextureSize, TextureSize, PF_B8G8R8A8, TextureName);
+	if (Texture)
+	{
+		Texture->SRGB = bSRGB;
+		Texture->NeverStream = true;
+		Texture->CompressionSettings = TC_Default;
+		Texture->MipGenSettings = TMGS_NoMipmaps;
+		Texture->Filter = TF_Bilinear;
+		Texture->AddressX = TA_Clamp;
+		Texture->AddressY = TA_Clamp;
+		Texture->UpdateResource();
+	}
+
+	return Texture;
+}
+
+void FillPaintPixels(TArray<FColor>& Pixels, FColor FillPixel)
+{
+	for (FColor& Pixel : Pixels)
+	{
+		Pixel = FillPixel;
+	}
+}
+
+void UpdatePaintTexture(UTexture2D* Texture, TArray<FColor>& Pixels, int32 TextureSize)
+{
+	if (!Texture || Pixels.IsEmpty())
+	{
+		return;
+	}
+
+	FUpdateTextureRegion2D* UpdateRegion = new FUpdateTextureRegion2D(0, 0, 0, 0, TextureSize, TextureSize);
+	Texture->UpdateTextureRegions(
+		0,
+		1,
+		UpdateRegion,
+		static_cast<uint32>(TextureSize * sizeof(FColor)),
+		static_cast<uint32>(sizeof(FColor)),
+		reinterpret_cast<uint8*>(Pixels.GetData()),
+		[](uint8*, const FUpdateTextureRegion2D* RegionToDelete)
+		{
+			delete RegionToDelete;
+		});
+}
 }
 
 UChameleonMetaballBodyComponent::UChameleonMetaballBodyComponent(const FObjectInitializer& ObjectInitializer)
@@ -669,6 +753,24 @@ UChameleonMetaballBodyComponent::UChameleonMetaballBodyComponent(const FObjectIn
 		TEXT("BodyColor"),
 		TEXT("BaseColor"),
 		TEXT("Color")
+	};
+	BaseColorTextureParameterNames = {
+		TEXT("BaseColorPaintTexture"),
+		TEXT("PaintBaseColorTexture"),
+		TEXT("BaseColorTexture"),
+		TEXT("BaseColorMap")
+	};
+	RoughnessTextureParameterNames = {
+		TEXT("RoughnessPaintTexture"),
+		TEXT("PaintRoughnessTexture"),
+		TEXT("RoughnessTexture"),
+		TEXT("RoughnessMap")
+	};
+	MetallicTextureParameterNames = {
+		TEXT("MetallicPaintTexture"),
+		TEXT("PaintMetallicTexture"),
+		TEXT("MetallicTexture"),
+		TEXT("MetallicMap")
 	};
 }
 
@@ -819,6 +921,12 @@ void UChameleonMetaballBodyComponent::GenerateBody()
 	RebuildVertexColors();
 	ClearAllMeshSections();
 	CreateMeshSection_LinearColor(0, AnimatedVertices, CachedTriangles, AnimatedNormals, CachedUV0, CachedVertexColors, AnimatedTangents, bBuildQueryCollision, false);
+	EnsureBaseColorPaintTexture();
+	EnsureRoughnessPaintTexture();
+	EnsureMetallicPaintTexture();
+	ResetBaseColorPaintTexture();
+	ResetRoughnessPaintTexture();
+	ResetMetallicPaintTexture();
 
 	if (BodyMaterial)
 	{
@@ -840,6 +948,7 @@ void UChameleonMetaballBodyComponent::SetCamouflageBaseColor(FLinearColor NewCol
 	NewColor.A = 1.0f;
 	CamouflageBaseColor = NewColor;
 	RebuildVertexColors();
+	ResetBaseColorPaintTexture();
 	UpdatePaintedMeshSection();
 	ApplyMaterialPaintParameters();
 }
@@ -848,6 +957,9 @@ void UChameleonMetaballBodyComponent::ClearPaint()
 {
 	PaintStrokes.Reset();
 	RebuildVertexColors();
+	ResetBaseColorPaintTexture();
+	ResetRoughnessPaintTexture();
+	ResetMetallicPaintTexture();
 	UpdatePaintedMeshSection();
 	ApplyMaterialPaintParameters();
 }
@@ -861,6 +973,8 @@ bool UChameleonMetaballBodyComponent::ApplyPaintStrokeLocal(const FChameleonPain
 
 	FChameleonPaintStroke SanitizedStroke = Stroke;
 	SanitizedStroke.Color.A = 1.0f;
+	SanitizedStroke.Roughness = FMath::Clamp(SanitizedStroke.Roughness, 0.0f, 1.0f);
+	SanitizedStroke.Metallic = FMath::Clamp(SanitizedStroke.Metallic, 0.0f, 1.0f);
 	SanitizedStroke.Strength = FMath::Clamp(SanitizedStroke.Strength, 0.0f, 1.0f);
 	SanitizedStroke.Falloff = FMath::Max(SanitizedStroke.Falloff, 0.1f);
 	PaintStrokes.Add(SanitizedStroke);
@@ -870,7 +984,7 @@ bool UChameleonMetaballBodyComponent::ApplyPaintStrokeLocal(const FChameleonPain
 	return true;
 }
 
-bool UChameleonMetaballBodyComponent::ApplyPaintStrokeWorld(FVector WorldPosition, FVector WorldNormal, float RadiusCm, FLinearColor Color, float Strength)
+bool UChameleonMetaballBodyComponent::ApplyPaintStrokeWorld(FVector WorldPosition, FVector WorldNormal, float RadiusCm, FLinearColor Color, float Strength, float Roughness, float Metallic)
 {
 	const FTransform& ComponentTransform = GetComponentTransform();
 	const FVector AnimatedLocalPosition = ComponentTransform.InverseTransformPosition(WorldPosition);
@@ -884,18 +998,26 @@ bool UChameleonMetaballBodyComponent::ApplyPaintStrokeWorld(FVector WorldPositio
 	Stroke.LocalNormal = RestNormal;
 	Stroke.RadiusCm = RadiusCm;
 	Stroke.Color = Color;
+	Stroke.Roughness = Roughness;
+	Stroke.Metallic = Metallic;
 	Stroke.Strength = Strength;
 	return ApplyPaintStrokeLocal(Stroke);
 }
 
-bool UChameleonMetaballBodyComponent::ApplyPaintStrokeFromHit(const FHitResult& Hit, float RadiusCm, FLinearColor Color, float Strength)
+bool UChameleonMetaballBodyComponent::ApplyPaintStrokeFromHit(const FHitResult& Hit, float RadiusCm, FLinearColor Color, float Strength, float Roughness, float Metallic)
 {
 	if (Hit.Component.Get() != this)
 	{
 		return false;
 	}
 
-	return ApplyPaintStrokeWorld(Hit.ImpactPoint, Hit.ImpactNormal, RadiusCm, Color, Strength);
+	FVector2D PaintUv;
+	float UvRadiusPerCm = 0.0f;
+	const bool bCanPaintTexture = TryGetPaintUvFromHit(Hit, PaintUv, UvRadiusPerCm);
+	const bool bAppliedLegacyStroke = ApplyPaintStrokeWorld(Hit.ImpactPoint, Hit.ImpactNormal, RadiusCm, Color, Strength, Roughness, Metallic);
+	const bool bAppliedTextureStroke = bCanPaintTexture
+		&& ApplyMaterialTextureStroke(PaintUv, RadiusCm, UvRadiusPerCm, Color, Roughness, Metallic, Strength, 1.0f);
+	return bAppliedLegacyStroke || bAppliedTextureStroke;
 }
 
 void UChameleonMetaballBodyComponent::ApplyMaterialPaintParameters()
@@ -915,6 +1037,40 @@ void UChameleonMetaballBodyComponent::ApplyMaterialPaintParameters()
 		return;
 	}
 
+	EnsureBaseColorPaintTexture();
+	EnsureRoughnessPaintTexture();
+	EnsureMetallicPaintTexture();
+	if (BaseColorPaintTexture)
+	{
+		for (const FName& ParameterName : BaseColorTextureParameterNames)
+		{
+			if (!ParameterName.IsNone())
+			{
+				DynamicMaterial->SetTextureParameterValue(ParameterName, BaseColorPaintTexture);
+			}
+		}
+	}
+	if (RoughnessPaintTexture)
+	{
+		for (const FName& ParameterName : RoughnessTextureParameterNames)
+		{
+			if (!ParameterName.IsNone())
+			{
+				DynamicMaterial->SetTextureParameterValue(ParameterName, RoughnessPaintTexture);
+			}
+		}
+	}
+	if (MetallicPaintTexture)
+	{
+		for (const FName& ParameterName : MetallicTextureParameterNames)
+		{
+			if (!ParameterName.IsNone())
+			{
+				DynamicMaterial->SetTextureParameterValue(ParameterName, MetallicPaintTexture);
+			}
+		}
+	}
+
 	for (const FName& ParameterName : PaintColorParameterNames)
 	{
 		if (!ParameterName.IsNone())
@@ -922,6 +1078,246 @@ void UChameleonMetaballBodyComponent::ApplyMaterialPaintParameters()
 			DynamicMaterial->SetVectorParameterValue(ParameterName, CamouflageBaseColor);
 		}
 	}
+}
+
+void UChameleonMetaballBodyComponent::EnsureBaseColorPaintTexture()
+{
+	const int32 ClampedTextureSize = FMath::Clamp(PaintTextureSize, 128, 4096);
+	const int32 RequiredPixelCount = ClampedTextureSize * ClampedTextureSize;
+	if (BaseColorPaintTexture && BaseColorPaintTexture->GetSizeX() == ClampedTextureSize && BaseColorPaintTexture->GetSizeY() == ClampedTextureSize && BaseColorPaintPixels.Num() == RequiredPixelCount)
+	{
+		return;
+	}
+
+	PaintTextureSize = ClampedTextureSize;
+	BaseColorPaintTexture = CreateTransientPaintTexture(PaintTextureSize, FName(TEXT("ChameleonBaseColorPaintTexture")), true);
+
+	BaseColorPaintPixels.SetNumUninitialized(RequiredPixelCount);
+	FLinearColor FillColor = CamouflageBaseColor;
+	FillColor.A = 1.0f;
+	FillPaintPixels(BaseColorPaintPixels, FillColor.ToFColorSRGB());
+	UpdateBaseColorPaintTexture();
+}
+
+void UChameleonMetaballBodyComponent::EnsureRoughnessPaintTexture()
+{
+	const int32 ClampedTextureSize = FMath::Clamp(PaintTextureSize, 128, 4096);
+	const int32 RequiredPixelCount = ClampedTextureSize * ClampedTextureSize;
+	if (RoughnessPaintTexture && RoughnessPaintTexture->GetSizeX() == ClampedTextureSize && RoughnessPaintTexture->GetSizeY() == ClampedTextureSize && RoughnessPaintPixels.Num() == RequiredPixelCount)
+	{
+		return;
+	}
+
+	PaintTextureSize = ClampedTextureSize;
+	RoughnessPaintTexture = CreateTransientPaintTexture(PaintTextureSize, FName(TEXT("ChameleonRoughnessPaintTexture")), false);
+	RoughnessPaintPixels.SetNumUninitialized(RequiredPixelCount);
+	FillPaintPixels(RoughnessPaintPixels, ScalarToPaintPixel(CamouflageBaseRoughness));
+	UpdateRoughnessPaintTexture();
+}
+
+void UChameleonMetaballBodyComponent::EnsureMetallicPaintTexture()
+{
+	const int32 ClampedTextureSize = FMath::Clamp(PaintTextureSize, 128, 4096);
+	const int32 RequiredPixelCount = ClampedTextureSize * ClampedTextureSize;
+	if (MetallicPaintTexture && MetallicPaintTexture->GetSizeX() == ClampedTextureSize && MetallicPaintTexture->GetSizeY() == ClampedTextureSize && MetallicPaintPixels.Num() == RequiredPixelCount)
+	{
+		return;
+	}
+
+	PaintTextureSize = ClampedTextureSize;
+	MetallicPaintTexture = CreateTransientPaintTexture(PaintTextureSize, FName(TEXT("ChameleonMetallicPaintTexture")), false);
+	MetallicPaintPixels.SetNumUninitialized(RequiredPixelCount);
+	FillPaintPixels(MetallicPaintPixels, ScalarToPaintPixel(CamouflageBaseMetallic));
+	UpdateMetallicPaintTexture();
+}
+
+void UChameleonMetaballBodyComponent::ResetBaseColorPaintTexture()
+{
+	EnsureBaseColorPaintTexture();
+	if (BaseColorPaintPixels.IsEmpty())
+	{
+		return;
+	}
+
+	FLinearColor FillColor = CamouflageBaseColor;
+	FillColor.A = 1.0f;
+	FillPaintPixels(BaseColorPaintPixels, FillColor.ToFColorSRGB());
+
+	UpdateBaseColorPaintTexture();
+}
+
+void UChameleonMetaballBodyComponent::ResetRoughnessPaintTexture()
+{
+	EnsureRoughnessPaintTexture();
+	if (RoughnessPaintPixels.IsEmpty())
+	{
+		return;
+	}
+
+	FillPaintPixels(RoughnessPaintPixels, ScalarToPaintPixel(CamouflageBaseRoughness));
+	UpdateRoughnessPaintTexture();
+}
+
+void UChameleonMetaballBodyComponent::ResetMetallicPaintTexture()
+{
+	EnsureMetallicPaintTexture();
+	if (MetallicPaintPixels.IsEmpty())
+	{
+		return;
+	}
+
+	FillPaintPixels(MetallicPaintPixels, ScalarToPaintPixel(CamouflageBaseMetallic));
+	UpdateMetallicPaintTexture();
+}
+
+void UChameleonMetaballBodyComponent::UpdateBaseColorPaintTexture()
+{
+	UpdatePaintTexture(BaseColorPaintTexture, BaseColorPaintPixels, PaintTextureSize);
+}
+
+void UChameleonMetaballBodyComponent::UpdateRoughnessPaintTexture()
+{
+	UpdatePaintTexture(RoughnessPaintTexture, RoughnessPaintPixels, PaintTextureSize);
+}
+
+void UChameleonMetaballBodyComponent::UpdateMetallicPaintTexture()
+{
+	UpdatePaintTexture(MetallicPaintTexture, MetallicPaintPixels, PaintTextureSize);
+}
+
+bool UChameleonMetaballBodyComponent::TryGetPaintUvFromHit(const FHitResult& Hit, FVector2D& OutUv, float& OutUvRadiusPerCm) const
+{
+	if (Hit.FaceIndex < 0 || CachedTriangles.IsEmpty() || CachedUV0.IsEmpty())
+	{
+		return false;
+	}
+
+	const int32 TriangleStart = Hit.FaceIndex * 3;
+	if (!CachedTriangles.IsValidIndex(TriangleStart + 2))
+	{
+		return false;
+	}
+
+	const int32 IndexA = CachedTriangles[TriangleStart];
+	const int32 IndexB = CachedTriangles[TriangleStart + 1];
+	const int32 IndexC = CachedTriangles[TriangleStart + 2];
+	const TArray<FVector>& VerticesToUse = AnimatedVertices.Num() == CachedVertices.Num() ? AnimatedVertices : CachedVertices;
+	if (!VerticesToUse.IsValidIndex(IndexA) || !VerticesToUse.IsValidIndex(IndexB) || !VerticesToUse.IsValidIndex(IndexC)
+		|| !CachedUV0.IsValidIndex(IndexA) || !CachedUV0.IsValidIndex(IndexB) || !CachedUV0.IsValidIndex(IndexC))
+	{
+		return false;
+	}
+
+	const FVector LocalHitPosition = GetComponentTransform().InverseTransformPosition(Hit.ImpactPoint);
+	const FVector Weights = ComputeBarycentricWeights(
+		LocalHitPosition,
+		VerticesToUse[IndexA],
+		VerticesToUse[IndexB],
+		VerticesToUse[IndexC]);
+	OutUv = CachedUV0[IndexA] * static_cast<float>(Weights.X)
+		+ CachedUV0[IndexB] * static_cast<float>(Weights.Y)
+		+ CachedUV0[IndexC] * static_cast<float>(Weights.Z);
+	OutUv.X = FMath::Clamp(OutUv.X, 0.0f, 1.0f);
+	OutUv.Y = FMath::Clamp(OutUv.Y, 0.0f, 1.0f);
+
+	const auto EdgeUvPerCm = [&VerticesToUse, this](int32 FirstIndex, int32 SecondIndex)
+	{
+		const float MeshDistance = FVector::Dist(VerticesToUse[FirstIndex], VerticesToUse[SecondIndex]);
+		if (MeshDistance <= UE_SMALL_NUMBER)
+		{
+			return 0.0f;
+		}
+
+		return static_cast<float>(FVector2D::Distance(CachedUV0[FirstIndex], CachedUV0[SecondIndex]) / MeshDistance);
+	};
+
+	const float EdgeAB = EdgeUvPerCm(IndexA, IndexB);
+	const float EdgeBC = EdgeUvPerCm(IndexB, IndexC);
+	const float EdgeCA = EdgeUvPerCm(IndexC, IndexA);
+	const float EdgeCount = (EdgeAB > 0.0f ? 1.0f : 0.0f) + (EdgeBC > 0.0f ? 1.0f : 0.0f) + (EdgeCA > 0.0f ? 1.0f : 0.0f);
+	OutUvRadiusPerCm = EdgeCount > 0.0f ? (EdgeAB + EdgeBC + EdgeCA) / EdgeCount : 1.0f / 128.0f;
+	return OutUvRadiusPerCm > 0.0f;
+}
+
+bool UChameleonMetaballBodyComponent::ApplyMaterialTextureStroke(FVector2D Uv, float RadiusCm, float UvRadiusPerCm, FLinearColor Color, float Roughness, float Metallic, float Strength, float Falloff)
+{
+	EnsureBaseColorPaintTexture();
+	EnsureRoughnessPaintTexture();
+	EnsureMetallicPaintTexture();
+	if (!BaseColorPaintTexture || !RoughnessPaintTexture || !MetallicPaintTexture
+		|| BaseColorPaintPixels.IsEmpty() || RoughnessPaintPixels.IsEmpty() || MetallicPaintPixels.IsEmpty()
+		|| RadiusCm <= 0.0f)
+	{
+		return false;
+	}
+
+	Color.A = 1.0f;
+	const float ClampedRoughness = FMath::Clamp(Roughness, 0.0f, 1.0f);
+	const float ClampedMetallic = FMath::Clamp(Metallic, 0.0f, 1.0f);
+	const float PixelRadius = FMath::Clamp(
+		RadiusCm * UvRadiusPerCm * static_cast<float>(PaintTextureSize),
+		FMath::Max(MinimumPaintBrushRadiusPixels, 1.0f),
+		static_cast<float>(PaintTextureSize) * 0.25f);
+	const int32 CenterX = FMath::Clamp(FMath::RoundToInt(Uv.X * static_cast<float>(PaintTextureSize - 1)), 0, PaintTextureSize - 1);
+	const int32 CenterY = FMath::Clamp(FMath::RoundToInt(Uv.Y * static_cast<float>(PaintTextureSize - 1)), 0, PaintTextureSize - 1);
+	const int32 CellX = FMath::Clamp(FMath::FloorToInt(Uv.X * static_cast<float>(PaintTextureUvColumns)), 0, PaintTextureUvColumns - 1);
+	const int32 CellY = FMath::Clamp(FMath::FloorToInt(Uv.Y * static_cast<float>(PaintTextureUvRows)), 0, PaintTextureUvRows - 1);
+	const int32 CellMinX = FMath::FloorToInt((static_cast<float>(CellX) / static_cast<float>(PaintTextureUvColumns)) * PaintTextureSize);
+	const int32 CellMaxX = FMath::CeilToInt((static_cast<float>(CellX + 1) / static_cast<float>(PaintTextureUvColumns)) * PaintTextureSize) - 1;
+	const int32 CellMinY = FMath::FloorToInt((static_cast<float>(CellY) / static_cast<float>(PaintTextureUvRows)) * PaintTextureSize);
+	const int32 CellMaxY = FMath::CeilToInt((static_cast<float>(CellY + 1) / static_cast<float>(PaintTextureUvRows)) * PaintTextureSize) - 1;
+	const int32 MinX = FMath::Clamp(FMath::FloorToInt(static_cast<float>(CenterX) - PixelRadius), CellMinX, CellMaxX);
+	const int32 MaxX = FMath::Clamp(FMath::CeilToInt(static_cast<float>(CenterX) + PixelRadius), CellMinX, CellMaxX);
+	const int32 MinY = FMath::Clamp(FMath::FloorToInt(static_cast<float>(CenterY) - PixelRadius), CellMinY, CellMaxY);
+	const int32 MaxY = FMath::Clamp(FMath::CeilToInt(static_cast<float>(CenterY) + PixelRadius), CellMinY, CellMaxY);
+	const float ClampedStrength = FMath::Clamp(Strength, 0.0f, 1.0f);
+	const float ClampedFalloff = FMath::Max(Falloff, 0.1f);
+
+	bool bChangedAnyPixel = false;
+	for (int32 PixelY = MinY; PixelY <= MaxY; ++PixelY)
+	{
+		for (int32 PixelX = MinX; PixelX <= MaxX; ++PixelX)
+		{
+			const float DistancePixels = FVector2D::Distance(FVector2D(static_cast<float>(PixelX), static_cast<float>(PixelY)), FVector2D(static_cast<float>(CenterX), static_cast<float>(CenterY)));
+			if (DistancePixels > PixelRadius)
+			{
+				continue;
+			}
+
+			const float NormalizedDistance = PixelRadius > UE_SMALL_NUMBER ? DistancePixels / PixelRadius : 0.0f;
+			const float Alpha = FMath::Clamp(ClampedStrength * FMath::Pow(1.0f - NormalizedDistance, ClampedFalloff), 0.0f, 1.0f);
+			const int32 PixelIndex = PixelY * PaintTextureSize + PixelX;
+			if (!BaseColorPaintPixels.IsValidIndex(PixelIndex)
+				|| !RoughnessPaintPixels.IsValidIndex(PixelIndex)
+				|| !MetallicPaintPixels.IsValidIndex(PixelIndex)
+				|| Alpha <= 0.0f)
+			{
+				continue;
+			}
+
+			FLinearColor ExistingColor = FLinearColor::FromSRGBColor(BaseColorPaintPixels[PixelIndex]);
+			ExistingColor.A = 1.0f;
+			FLinearColor PaintedColor = FLinearColor::LerpUsingHSV(ExistingColor, Color, Alpha);
+			PaintedColor.A = 1.0f;
+			BaseColorPaintPixels[PixelIndex] = PaintedColor.ToFColorSRGB();
+
+			const float ExistingRoughness = PaintPixelToScalar(RoughnessPaintPixels[PixelIndex]);
+			RoughnessPaintPixels[PixelIndex] = ScalarToPaintPixel(FMath::Lerp(ExistingRoughness, ClampedRoughness, Alpha));
+
+			const float ExistingMetallic = PaintPixelToScalar(MetallicPaintPixels[PixelIndex]);
+			MetallicPaintPixels[PixelIndex] = ScalarToPaintPixel(FMath::Lerp(ExistingMetallic, ClampedMetallic, Alpha));
+			bChangedAnyPixel = true;
+		}
+	}
+
+	if (bChangedAnyPixel)
+	{
+		UpdateBaseColorPaintTexture();
+		UpdateRoughnessPaintTexture();
+		UpdateMetallicPaintTexture();
+	}
+
+	return bChangedAnyPixel;
 }
 
 void UChameleonMetaballBodyComponent::RebuildVertexColors()

@@ -65,3 +65,8 @@
 
 - 질문: 레벨에 추가한 Sky Atmosphere 같은 액터가 자꾸 사라지는 이유가 레벨을 처음부터 새로 만들고 있어서인가?
 - 답변: 맞다. `ChameleonPainterBuildTestContent` 커맨드렛의 `CreateTestLevel()`이 기존 `L_ChameleonPainter_Test` 맵을 로드해 갱신하는 방식이 아니라 `UEditorLoadingAndSavingUtils::NewBlankMap(false)`로 새 빈 맵을 만든 뒤 같은 경로에 `SaveMap()`으로 덮어쓴다. 따라서 수동으로 추가한 레벨 액터는 커맨드렛 실행 때 사라진다.
+
+## 2026-07-09 13:39:00 (소요시간: 00:10:00)
+
+- 질문: 캐릭터가 체크무늬로 보이는 이유가 무엇인가?
+- 답변: `M_CPT_HiderPaint`가 머티리얼 컴파일에 실패해 UE 기본 체크무늬 머티리얼로 대체되고 있었다. 처음에는 Roughness/Metallic `ComponentMask` 입력 누락이 원인이었고, 이후 기본 White/Black 텍스처와 `Linear Color` 샘플러 타입 불일치가 남아 있었다. `R` 채널 직접 연결과 `SAMPLERTYPE_Color` 적용 후 최신 에디터 로그에서 해당 머티리얼 컴파일 경고가 사라졌다.

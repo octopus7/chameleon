@@ -212,3 +212,38 @@
 - `CPT_DirectionalLight`의 `UDirectionalLightComponent`에 `SetAtmosphereSunLight(true)`와 `SetAtmosphereSunLightIndex(0)`를 적용해 대기 태양광으로 연결되도록 했다.
 - `HideSeekEditor Win64 Development` 일반 빌드가 성공했다.
 - `ChameleonPainterBuildTestContent` 커맨드렛을 다시 실행해 `L_ChameleonPainter_Test.umap`에 생성 변경을 반영했고, 결과는 0 errors 및 기존 procedural mesh degenerate triangle warning 2건이었다.
+
+## 2026-07-09 13:29:00 (소요시간: 00:08:20)
+
+- 베이스 컬러와 별개로 `RoughnessPaintTexture`, `MetallicPaintTexture` 런타임 텍스처와 CPU 픽셀 버퍼를 추가해 Roughness/Metallic 맵을 따로 구성했다.
+- `FChameleonPaintStroke`, `ApplyPaintStrokeWorld`, `ApplyPaintStrokeFromHit`에 Roughness/Metallic 값을 추가하고, 한 번의 히트 UV 스탬프로 BaseColor/Roughness/Metallic 세 맵을 함께 갱신하도록 확장했다.
+- `AChameleonHiderCharacter`에 현재 브러시 Roughness/Metallic 상태를 추가하고, 페인트 입력 시 컬러와 함께 해당 값을 바디 컴포넌트로 전달하게 했다.
+- `UChameleonColorPickerWidget`에 `RoughnessSlider`, `MetallicSlider`와 변경/커밋 델리게이트를 추가해 위젯 슬라이더로 브러시 Roughness/Metallic 값을 조정할 수 있게 했다.
+- `ChameleonPainterBuildTestContent` 커맨드렛이 `M_CPT_HiderPaint`를 `BaseColorPaintTexture`, `RoughnessPaintTexture`, `MetallicPaintTexture` 파라미터 기반 머티리얼로 재생성하도록 변경했다.
+- 같은 커맨드렛에서 `WBP_ChameleonColorPicker`에 Roughness/Metallic 슬라이더를 추가하고, 캐릭터 BP CDO와 프리뷰 바디의 기본 Roughness/Metallic 값을 `0.84`/`0.0`으로 설정하게 했다.
+- `HideSeekEditor Win64 Development` 빌드가 성공했다.
+- `UnrealEditor-Cmd.exe ... -run=ChameleonPainterBuildTestContent -unattended -nop4` 커맨드렛이 성공했고, 결과는 0 errors 및 기존 procedural mesh degenerate triangle warning 2건이다.
+- AGENTS 지침에 따라 빌드와 커맨드렛 성공 후 `HideSeek/HideSeek.uproject`를 Unreal Editor로 실행했다.
+
+## 2026-07-09 13:39:00 (소요시간: 00:10:00)
+
+- 캐릭터가 체크무늬 기본 머티리얼로 보이는 문제를 확인하고 `M_CPT_HiderPaint` 컴파일 실패 원인을 수정했다.
+- `M_CPT_HiderPaint` 생성 코드에서 Roughness/Metallic용 `ComponentMask` 노드를 제거하고, 각 텍스처 샘플의 `R` 출력 채널을 `MP_Roughness`/`MP_Metallic`에 직접 연결하도록 변경했다.
+- Roughness/Metallic 기본 텍스처 샘플러 타입을 `SAMPLERTYPE_Color`로 맞춰 `/Engine/EngineResources/WhiteSquareTexture` 및 `/Engine/EngineResources/Black` 기본 텍스처와의 샘플러 타입 불일치를 해결했다.
+- 브러시 커서 UI 머티리얼도 `ComponentMask` 노드 대신 텍스처 샘플의 `R/G/B` 출력 채널을 직접 사용하도록 바꿔 같은 `Missing ComponentMask input` 경고를 제거했다.
+- 기존 `WBP_ChameleonColorPicker`가 이미 있을 때도 `RoughnessSlider`/`MetallicSlider`가 누락되어 있으면 추가하도록 커맨드렛의 위젯 보강 경로를 수정했다.
+- 컬러 피커 뷰포트 크기와 WBP 크기를 `400x340`으로 늘리고, `Rgh`/`Met` 라벨 폭을 34px로 조정해 슬라이더가 잘리지 않게 했다.
+- Live Coding 잠금 때문에 실행 중인 Unreal Editor를 종료한 뒤 `HideSeekEditor Win64 Development` 빌드를 다시 성공시켰다.
+- `ChameleonPainterBuildTestContent` 커맨드렛을 재실행해 머티리얼/UI 에셋을 다시 저장했고, 결과는 0 errors 및 기존 procedural mesh degenerate triangle warning 2건이었다.
+- `HideSeek/HideSeek.uproject`를 Unreal Editor로 다시 실행한 뒤 최신 로그에서 `M_CPT_HiderPaint`, `M_CPT_BrushCursor_UI`, `Failed to compile Material`, `Missing ComponentMask`, `Sampler type`, `EXCEPTION_STACK_OVERFLOW` 오류가 재발하지 않음을 확인했다.
+
+## 2026-07-09 13:51:00 (소요시간: 00:08:45)
+
+- 페인트가 실제로 적용된 월드 히트 위치에 현재 브러시 색상의 스프레이 이펙트가 뿌려지도록 구현했다.
+- `AChameleonPaintSprayActor`를 추가해 `UProceduralMeshComponent` 기반의 작은 컬러 스프레이 조각들을 표면 법선 방향으로 생성하고, 짧은 수명 동안 `PaintSprayOpacity`로 페이드아웃되게 했다.
+- `AChameleonHiderCharacter::PaintTriggered()`에서 `ApplyPaintStrokeFromHit()`이 성공했을 때만 스프레이를 스폰하도록 연결했다.
+- 스프레이 이펙트 설정으로 `PaintSprayEffectClass`, `PaintSprayMaterial`, `PaintSprayLifetimeSeconds`, `PaintSprayParticleCount`, `PaintSprayRadiusScale`, `PaintSpraySpawnIntervalSeconds`를 추가했다.
+- `ChameleonPainterBuildTestContent` 커맨드렛에 `M_CPT_PaintSpray` 투명 unlit vertex-color 머티리얼 생성을 추가하고, `BP_ChameleonHiderCharacter` 기본값에 스프레이 액터/머티리얼을 연결했다.
+- `HideSeekEditor Win64 Development` 빌드가 성공했다.
+- `ChameleonPainterBuildTestContent` 커맨드렛을 재실행해 `M_CPT_PaintSpray` 및 캐릭터 BP 기본값을 저장했고, 최종 결과는 0 errors 및 기존 procedural mesh degenerate triangle warning 2건이었다.
+- `HideSeek/HideSeek.uproject`를 Unreal Editor로 다시 실행했고, 최신 로그에서 `M_CPT_PaintSpray`, `M_CPT_HiderPaint`, 머티리얼 컴파일 실패, 스택 오버플로우 관련 오류가 재발하지 않음을 확인했다.

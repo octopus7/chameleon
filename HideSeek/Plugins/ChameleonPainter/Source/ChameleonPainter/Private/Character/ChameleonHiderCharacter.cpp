@@ -1,5 +1,6 @@
 #include "Character/ChameleonHiderCharacter.h"
 
+#include "Actors/ChameleonPaintSprayActor.h"
 #include "Blueprint/UserWidget.h"
 #include "Camera/CameraComponent.h"
 #include "Components/CapsuleComponent.h"
@@ -155,7 +156,11 @@ void AChameleonHiderCharacter::PaintTriggered()
 	FHitResult Hit;
 	if (TraceFromView(BrushTraceDistance, Hit, true))
 	{
-		BodyComponent->ApplyPaintStrokeFromHit(Hit, BrushRadiusCm, CurrentBrushColor, BrushStrength);
+		const bool bAppliedPaint = BodyComponent->ApplyPaintStrokeFromHit(Hit, BrushRadiusCm, CurrentBrushColor, BrushStrength, CurrentBrushRoughness, CurrentBrushMetallic);
+		if (bAppliedPaint)
+		{
+			SpawnPaintSprayEffect(Hit);
+		}
 	}
 }
 
@@ -183,6 +188,12 @@ void AChameleonHiderCharacter::HandlePickerColorChanged(FLinearColor Color)
 {
 	Color.A = 1.0f;
 	CurrentBrushColor = Color;
+}
+
+void AChameleonHiderCharacter::HandlePickerMaterialPropertiesChanged(float Roughness, float Metallic)
+{
+	CurrentBrushRoughness = FMath::Clamp(Roughness, 0.0f, 1.0f);
+	CurrentBrushMetallic = FMath::Clamp(Metallic, 0.0f, 1.0f);
 }
 
 void AChameleonHiderCharacter::AddMappingContext()
@@ -319,6 +330,47 @@ bool AChameleonHiderCharacter::TrySampleColorFromHit(const FHitResult& Hit, FLin
 	return false;
 }
 
+void AChameleonHiderCharacter::SpawnPaintSprayEffect(const FHitResult& Hit)
+{
+	UWorld* World = GetWorld();
+	if (!World || PaintSprayParticleCount <= 0 || PaintSprayLifetimeSeconds <= 0.0f)
+	{
+		return;
+	}
+
+	const double CurrentTimeSeconds = World->GetTimeSeconds();
+	if (PaintSpraySpawnIntervalSeconds > 0.0f && CurrentTimeSeconds - LastPaintSpraySpawnTimeSeconds < static_cast<double>(PaintSpraySpawnIntervalSeconds))
+	{
+		return;
+	}
+	LastPaintSpraySpawnTimeSeconds = CurrentTimeSeconds;
+
+	const FVector SurfaceNormal = Hit.ImpactNormal.GetSafeNormal(UE_SMALL_NUMBER, FVector::UpVector);
+	const FVector SpawnLocation = Hit.ImpactPoint + SurfaceNormal * 1.5f;
+	TSubclassOf<AChameleonPaintSprayActor> SprayClass = PaintSprayEffectClass;
+	if (!SprayClass)
+	{
+		SprayClass = AChameleonPaintSprayActor::StaticClass();
+	}
+
+	FActorSpawnParameters SpawnParameters;
+	SpawnParameters.Owner = this;
+	SpawnParameters.Instigator = this;
+	SpawnParameters.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
+
+	AChameleonPaintSprayActor* SprayActor = World->SpawnActor<AChameleonPaintSprayActor>(SprayClass, SpawnLocation, FRotator::ZeroRotator, SpawnParameters);
+	if (SprayActor)
+	{
+		SprayActor->InitializeSpray(
+			SurfaceNormal,
+			CurrentBrushColor,
+			BrushRadiusCm * PaintSprayRadiusScale,
+			PaintSprayMaterial,
+			PaintSprayLifetimeSeconds,
+			PaintSprayParticleCount);
+	}
+}
+
 void AChameleonHiderCharacter::EnsureColorPicker()
 {
 	if (ColorPickerWidget || !IsLocallyControlled())
@@ -343,11 +395,13 @@ void AChameleonHiderCharacter::EnsureColorPicker()
 		ColorPickerWidget->SetTargetPaintComponent(nullptr);
 		ColorPickerWidget->bApplyChangesImmediately = false;
 		ColorPickerWidget->SetSelectedColor(CurrentBrushColor, false);
+		ColorPickerWidget->SetSelectedMaterialProperties(CurrentBrushRoughness, CurrentBrushMetallic, false);
 		ColorPickerWidget->OnColorChanged.AddDynamic(this, &AChameleonHiderCharacter::HandlePickerColorChanged);
+		ColorPickerWidget->OnMaterialPropertiesChanged.AddDynamic(this, &AChameleonHiderCharacter::HandlePickerMaterialPropertiesChanged);
 		ColorPickerWidget->AddToViewport(100);
 		ColorPickerWidget->SetAlignmentInViewport(FVector2D::ZeroVector);
 		ColorPickerWidget->SetPositionInViewport(FVector2D(24.0f, 24.0f), false);
-		ColorPickerWidget->SetDesiredSizeInViewport(FVector2D(400.0f, 220.0f));
+		ColorPickerWidget->SetDesiredSizeInViewport(FVector2D(400.0f, 340.0f));
 	}
 }
 

@@ -1,6 +1,7 @@
 #include "Commandlets/ChameleonPainterBuildTestContentCommandlet.h"
 
 #include "Actors/ChameleonHiderBodyActor.h"
+#include "Actors/ChameleonPaintSprayActor.h"
 #include "AssetRegistry/AssetRegistryModule.h"
 #include "Camera/CameraActor.h"
 #include "Character/ChameleonHiderCharacter.h"
@@ -51,8 +52,10 @@
 #include "Materials/MaterialExpressionConstant.h"
 #include "Materials/MaterialExpressionMax.h"
 #include "Materials/MaterialExpressionMultiply.h"
+#include "Materials/MaterialExpressionScalarParameter.h"
 #include "Materials/MaterialExpressionTextureSample.h"
 #include "Materials/MaterialExpressionTextureSampleParameter2D.h"
+#include "Materials/MaterialExpressionVertexColor.h"
 #include "Materials/MaterialExpressionVectorParameter.h"
 #include "MaterialEditingLibrary.h"
 #include "Misc/ConfigCacheIni.h"
@@ -72,6 +75,8 @@ const FString InputPath = RootPath / TEXT("Input");
 const FString BlueprintPath = RootPath / TEXT("Blueprints");
 const FString UIPath = RootPath / TEXT("UI");
 const FString MapPath = RootPath / TEXT("Maps");
+constexpr float ColorPickerWidgetWidth = 400.0f;
+constexpr float ColorPickerWidgetHeight = 340.0f;
 
 FString ToObjectPath(const FString& PackageName)
 {
@@ -265,22 +270,70 @@ UMaterial* CreateHiderPaintMaterial()
 
 	UMaterialExpressionTextureSampleParameter2D* BaseColorTexture = Cast<UMaterialExpressionTextureSampleParameter2D>(
 		UMaterialEditingLibrary::CreateMaterialExpression(Material, UMaterialExpressionTextureSampleParameter2D::StaticClass(), -520, -100));
-	UMaterialExpressionConstant* Roughness = Cast<UMaterialExpressionConstant>(
-		UMaterialEditingLibrary::CreateMaterialExpression(Material, UMaterialExpressionConstant::StaticClass(), -360, 120));
+	UMaterialExpressionTextureSampleParameter2D* RoughnessTexture = Cast<UMaterialExpressionTextureSampleParameter2D>(
+		UMaterialEditingLibrary::CreateMaterialExpression(Material, UMaterialExpressionTextureSampleParameter2D::StaticClass(), -520, 120));
+	UMaterialExpressionTextureSampleParameter2D* MetallicTexture = Cast<UMaterialExpressionTextureSampleParameter2D>(
+		UMaterialEditingLibrary::CreateMaterialExpression(Material, UMaterialExpressionTextureSampleParameter2D::StaticClass(), -520, 300));
+
+	UTexture2D* WhiteTexture = LoadObject<UTexture2D>(nullptr, TEXT("/Engine/EngineResources/WhiteSquareTexture.WhiteSquareTexture"));
+	UTexture2D* BlackTexture = LoadObject<UTexture2D>(nullptr, TEXT("/Engine/EngineResources/Black.Black"));
 
 	if (BaseColorTexture)
 	{
 		BaseColorTexture->ParameterName = TEXT("BaseColorPaintTexture");
-		BaseColorTexture->Texture = LoadObject<UTexture2D>(nullptr, TEXT("/Engine/EngineResources/WhiteSquareTexture.WhiteSquareTexture"));
+		BaseColorTexture->Texture = WhiteTexture;
 		BaseColorTexture->AutoSetSampleType();
 	}
-	if (Roughness)
+	if (RoughnessTexture)
 	{
-		Roughness->R = 0.84f;
+		RoughnessTexture->ParameterName = TEXT("RoughnessPaintTexture");
+		RoughnessTexture->Texture = WhiteTexture;
+		RoughnessTexture->SamplerType = SAMPLERTYPE_Color;
+	}
+	if (MetallicTexture)
+	{
+		MetallicTexture->ParameterName = TEXT("MetallicPaintTexture");
+		MetallicTexture->Texture = BlackTexture ? BlackTexture : WhiteTexture;
+		MetallicTexture->SamplerType = SAMPLERTYPE_Color;
 	}
 
 	UMaterialEditingLibrary::ConnectMaterialProperty(BaseColorTexture, TEXT(""), MP_BaseColor);
-	UMaterialEditingLibrary::ConnectMaterialProperty(Roughness, TEXT(""), MP_Roughness);
+	UMaterialEditingLibrary::ConnectMaterialProperty(RoughnessTexture, TEXT("R"), MP_Roughness);
+	UMaterialEditingLibrary::ConnectMaterialProperty(MetallicTexture, TEXT("R"), MP_Metallic);
+	UMaterialEditingLibrary::RecompileMaterial(Material);
+	Material->PostEditChange();
+	Material->MarkPackageDirty();
+	SavePackageForObject(Material);
+	return Material;
+}
+
+UMaterial* CreatePaintSprayMaterial()
+{
+	UMaterial* Material = FindOrCreateAsset<UMaterial>(MaterialPath / TEXT("M_CPT_PaintSpray"));
+	Material->PreEditChange(nullptr);
+	UMaterialEditingLibrary::DeleteAllMaterialExpressions(Material);
+	Material->BlendMode = BLEND_Translucent;
+	Material->TwoSided = true;
+	Material->SetShadingModel(MSM_Unlit);
+
+	UMaterialExpressionVertexColor* VertexColor = Cast<UMaterialExpressionVertexColor>(
+		UMaterialEditingLibrary::CreateMaterialExpression(Material, UMaterialExpressionVertexColor::StaticClass(), -640, -40));
+	UMaterialExpressionScalarParameter* OpacityParameter = Cast<UMaterialExpressionScalarParameter>(
+		UMaterialEditingLibrary::CreateMaterialExpression(Material, UMaterialExpressionScalarParameter::StaticClass(), -640, 180));
+	UMaterialExpressionMultiply* OpacityMultiply = Cast<UMaterialExpressionMultiply>(
+		UMaterialEditingLibrary::CreateMaterialExpression(Material, UMaterialExpressionMultiply::StaticClass(), -320, 150));
+
+	if (OpacityParameter)
+	{
+		OpacityParameter->ParameterName = TEXT("PaintSprayOpacity");
+		OpacityParameter->DefaultValue = 1.0f;
+	}
+
+	UMaterialEditingLibrary::ConnectMaterialProperty(VertexColor, TEXT(""), MP_EmissiveColor);
+	UMaterialEditingLibrary::ConnectMaterialExpressions(VertexColor, TEXT("A"), OpacityMultiply, TEXT("A"));
+	UMaterialEditingLibrary::ConnectMaterialExpressions(OpacityParameter, TEXT(""), OpacityMultiply, TEXT("B"));
+	UMaterialEditingLibrary::ConnectMaterialProperty(OpacityMultiply, TEXT(""), MP_Opacity);
+
 	UMaterialEditingLibrary::RecompileMaterial(Material);
 	Material->PostEditChange();
 	Material->MarkPackageDirty();
@@ -355,37 +408,15 @@ UMaterial* CreateBrushCursorMaterial(UTexture2D* CursorTexture)
 		TextureSample->AutoSetSampleType();
 	}
 
-	UMaterialExpressionComponentMask* MaskR = Cast<UMaterialExpressionComponentMask>(
-		UMaterialEditingLibrary::CreateMaterialExpression(Material, UMaterialExpressionComponentMask::StaticClass(), -360, 80));
-	UMaterialExpressionComponentMask* MaskG = Cast<UMaterialExpressionComponentMask>(
-		UMaterialEditingLibrary::CreateMaterialExpression(Material, UMaterialExpressionComponentMask::StaticClass(), -360, 180));
-	UMaterialExpressionComponentMask* MaskB = Cast<UMaterialExpressionComponentMask>(
-		UMaterialEditingLibrary::CreateMaterialExpression(Material, UMaterialExpressionComponentMask::StaticClass(), -360, 280));
 	UMaterialExpressionMax* MaxRG = Cast<UMaterialExpressionMax>(
 		UMaterialEditingLibrary::CreateMaterialExpression(Material, UMaterialExpressionMax::StaticClass(), -120, 140));
 	UMaterialExpressionMax* MaxRGB = Cast<UMaterialExpressionMax>(
 		UMaterialEditingLibrary::CreateMaterialExpression(Material, UMaterialExpressionMax::StaticClass(), 120, 220));
 
-	if (MaskR)
-	{
-		MaskR->R = true;
-	}
-	if (MaskG)
-	{
-		MaskG->G = true;
-	}
-	if (MaskB)
-	{
-		MaskB->B = true;
-	}
-
-	UMaterialEditingLibrary::ConnectMaterialExpressions(TextureSample, TEXT(""), MaskR, TEXT("Input"));
-	UMaterialEditingLibrary::ConnectMaterialExpressions(TextureSample, TEXT(""), MaskG, TEXT("Input"));
-	UMaterialEditingLibrary::ConnectMaterialExpressions(TextureSample, TEXT(""), MaskB, TEXT("Input"));
-	UMaterialEditingLibrary::ConnectMaterialExpressions(MaskR, TEXT(""), MaxRG, TEXT("A"));
-	UMaterialEditingLibrary::ConnectMaterialExpressions(MaskG, TEXT(""), MaxRG, TEXT("B"));
+	UMaterialEditingLibrary::ConnectMaterialExpressions(TextureSample, TEXT("R"), MaxRG, TEXT("A"));
+	UMaterialEditingLibrary::ConnectMaterialExpressions(TextureSample, TEXT("G"), MaxRG, TEXT("B"));
 	UMaterialEditingLibrary::ConnectMaterialExpressions(MaxRG, TEXT(""), MaxRGB, TEXT("A"));
-	UMaterialEditingLibrary::ConnectMaterialExpressions(MaskB, TEXT(""), MaxRGB, TEXT("B"));
+	UMaterialEditingLibrary::ConnectMaterialExpressions(TextureSample, TEXT("B"), MaxRGB, TEXT("B"));
 	UMaterialEditingLibrary::ConnectMaterialProperty(TextureSample, TEXT(""), MP_EmissiveColor);
 	UMaterialEditingLibrary::ConnectMaterialProperty(MaxRGB, TEXT(""), MP_Opacity);
 
@@ -527,6 +558,16 @@ FLinearColor GetDefaultBodyColor()
 	return FLinearColor::White;
 }
 
+float GetDefaultBrushRoughness()
+{
+	return 0.84f;
+}
+
+float GetDefaultBrushMetallic()
+{
+	return 0.0f;
+}
+
 TArray<FLinearColor> GetHighVisibilitySwatchColors()
 {
 	return {
@@ -567,6 +608,58 @@ void EnsureWidgetTreeVariableGuids(UWidgetBlueprint* WidgetBlueprint, UWidgetTre
 	}
 }
 
+USlider* EnsureColorPickerSliderRow(UWidgetBlueprint* WidgetBlueprint, UWidgetTree* WidgetTree, UVerticalBox* RootBox, const FText& LabelText, const FName& SliderName, float InitialValue)
+{
+	if (!WidgetTree || !RootBox)
+	{
+		return nullptr;
+	}
+
+	if (USlider* ExistingSlider = Cast<USlider>(WidgetTree->FindWidget(SliderName)))
+	{
+		ExistingSlider->SetValue(InitialValue);
+		EnsureWidgetVariableGuid(WidgetBlueprint, ExistingSlider);
+		return ExistingSlider;
+	}
+
+	const FName RowName = MakeUniqueObjectName(WidgetTree, UHorizontalBox::StaticClass(), FName(*FString::Printf(TEXT("%sRow"), *SliderName.ToString())));
+	UHorizontalBox* Row = WidgetTree->ConstructWidget<UHorizontalBox>(UHorizontalBox::StaticClass(), RowName);
+	EnsureWidgetVariableGuid(WidgetBlueprint, Row);
+
+	USizeBox* LabelSize = WidgetTree->ConstructWidget<USizeBox>(
+		USizeBox::StaticClass(),
+		MakeUniqueObjectName(WidgetTree, USizeBox::StaticClass(), FName(*FString::Printf(TEXT("%sLabelSize"), *SliderName.ToString()))));
+	EnsureWidgetVariableGuid(WidgetBlueprint, LabelSize);
+	LabelSize->SetWidthOverride(34.0f);
+
+	UTextBlock* Label = CreateWidgetText(
+		WidgetTree,
+		MakeUniqueObjectName(WidgetTree, UTextBlock::StaticClass(), FName(*FString::Printf(TEXT("%sLabel"), *SliderName.ToString()))),
+		LabelText);
+	EnsureWidgetVariableGuid(WidgetBlueprint, Label);
+	LabelSize->SetContent(Label);
+	Row->AddChildToHorizontalBox(LabelSize);
+
+	USizeBox* SliderSize = WidgetTree->ConstructWidget<USizeBox>(
+		USizeBox::StaticClass(),
+		MakeUniqueObjectName(WidgetTree, USizeBox::StaticClass(), FName(*FString::Printf(TEXT("%sSize"), *SliderName.ToString()))));
+	EnsureWidgetVariableGuid(WidgetBlueprint, SliderSize);
+	SliderSize->SetWidthOverride(240.0f);
+
+	USlider* Slider = WidgetTree->ConstructWidget<USlider>(USlider::StaticClass(), SliderName);
+	EnsureWidgetVariableGuid(WidgetBlueprint, Slider);
+	Slider->SetValue(InitialValue);
+	SliderSize->SetContent(Slider);
+	Row->AddChildToHorizontalBox(SliderSize);
+
+	if (UVerticalBoxSlot* RowSlot = RootBox->AddChildToVerticalBox(Row))
+	{
+		RowSlot->SetPadding(FMargin(0.0f, 0.0f, 0.0f, 6.0f));
+	}
+
+	return Slider;
+}
+
 void ApplyColorPickerSwatchColors(UWidgetBlueprint* WidgetBlueprint, UWidgetTree* WidgetTree)
 {
 	if (!WidgetTree)
@@ -587,8 +680,8 @@ void ApplyColorPickerSwatchColors(UWidgetBlueprint* WidgetBlueprint, UWidgetTree
 	}
 	if (ColorPickerSize)
 	{
-		ColorPickerSize->SetWidthOverride(400.0f);
-		ColorPickerSize->SetHeightOverride(220.0f);
+		ColorPickerSize->SetWidthOverride(ColorPickerWidgetWidth);
+		ColorPickerSize->SetHeightOverride(ColorPickerWidgetHeight);
 	}
 
 	UHorizontalBox* SwatchRow = Cast<UHorizontalBox>(WidgetTree->FindWidget(FName(TEXT("Swatches"))));
@@ -631,6 +724,34 @@ void ApplyColorPickerSwatchColors(UWidgetBlueprint* WidgetBlueprint, UWidgetTree
 		}
 	}
 
+	if (UVerticalBox* RootBox = Cast<UVerticalBox>(WidgetTree->FindWidget(FName(TEXT("ColorPickerRoot")))))
+	{
+		UButton* CommitButton = Cast<UButton>(WidgetTree->FindWidget(FName(TEXT("CommitButton"))));
+		if (CommitButton)
+		{
+			RootBox->RemoveChild(CommitButton);
+		}
+
+		EnsureColorPickerSliderRow(WidgetBlueprint, WidgetTree, RootBox, FText::FromString(TEXT("R")), TEXT("RedSlider"), GetDefaultBrushColor().R);
+		EnsureColorPickerSliderRow(WidgetBlueprint, WidgetTree, RootBox, FText::FromString(TEXT("G")), TEXT("GreenSlider"), GetDefaultBrushColor().G);
+		EnsureColorPickerSliderRow(WidgetBlueprint, WidgetTree, RootBox, FText::FromString(TEXT("B")), TEXT("BlueSlider"), GetDefaultBrushColor().B);
+		EnsureColorPickerSliderRow(WidgetBlueprint, WidgetTree, RootBox, FText::FromString(TEXT("Rgh")), TEXT("RoughnessSlider"), GetDefaultBrushRoughness());
+		EnsureColorPickerSliderRow(WidgetBlueprint, WidgetTree, RootBox, FText::FromString(TEXT("Met")), TEXT("MetallicSlider"), GetDefaultBrushMetallic());
+
+		if (!CommitButton)
+		{
+			CommitButton = WidgetTree->ConstructWidget<UButton>(UButton::StaticClass(), TEXT("CommitButton"));
+			EnsureWidgetVariableGuid(WidgetBlueprint, CommitButton);
+			UTextBlock* CommitText = CreateWidgetText(WidgetTree, TEXT("CommitText"), FText::FromString(TEXT("Apply")));
+			EnsureWidgetVariableGuid(WidgetBlueprint, CommitText);
+			CommitButton->SetContent(CommitText);
+		}
+		if (CommitButton)
+		{
+			RootBox->AddChildToVerticalBox(CommitButton);
+		}
+	}
+
 	EnsureWidgetTreeVariableGuids(WidgetBlueprint, WidgetTree);
 }
 
@@ -666,8 +787,8 @@ void RebuildColorPickerWidgetTree(UWidgetBlueprint* WidgetBlueprint)
 
 	USizeBox* ColorPickerSize = WidgetTree->ConstructWidget<USizeBox>(USizeBox::StaticClass(), TEXT("ColorPickerSize"));
 	EnsureWidgetVariableGuid(WidgetBlueprint, ColorPickerSize);
-	ColorPickerSize->SetWidthOverride(400.0f);
-	ColorPickerSize->SetHeightOverride(220.0f);
+	ColorPickerSize->SetWidthOverride(ColorPickerWidgetWidth);
+	ColorPickerSize->SetHeightOverride(ColorPickerWidgetHeight);
 	WidgetTree->RootWidget = ColorPickerSize;
 
 	UBorder* PanelBorder = WidgetTree->ConstructWidget<UBorder>(UBorder::StaticClass(), TEXT("BrushColorPanel"));
@@ -728,7 +849,7 @@ void RebuildColorPickerWidgetTree(UWidgetBlueprint* WidgetBlueprint)
 		SwatchRowSlot->SetPadding(FMargin(0.0f, 0.0f, 0.0f, 8.0f));
 	}
 
-	auto AddSliderRow = [WidgetTree, RootBox](const FText& LabelText, const FName& SliderName)
+	auto AddSliderRow = [WidgetTree, RootBox](const FText& LabelText, const FName& SliderName, float InitialValue)
 	{
 		UHorizontalBox* Row = WidgetTree->ConstructWidget<UHorizontalBox>(
 			UHorizontalBox::StaticClass(),
@@ -737,7 +858,7 @@ void RebuildColorPickerWidgetTree(UWidgetBlueprint* WidgetBlueprint)
 		USizeBox* LabelSize = WidgetTree->ConstructWidget<USizeBox>(
 			USizeBox::StaticClass(),
 			FName(*FString::Printf(TEXT("%sLabelSize"), *SliderName.ToString())));
-		LabelSize->SetWidthOverride(24.0f);
+		LabelSize->SetWidthOverride(34.0f);
 		LabelSize->SetContent(CreateWidgetText(WidgetTree, FName(*FString::Printf(TEXT("%sLabel"), *SliderName.ToString())), LabelText));
 		Row->AddChildToHorizontalBox(LabelSize);
 
@@ -746,7 +867,7 @@ void RebuildColorPickerWidgetTree(UWidgetBlueprint* WidgetBlueprint)
 			FName(*FString::Printf(TEXT("%sSize"), *SliderName.ToString())));
 		SliderSize->SetWidthOverride(240.0f);
 		USlider* Slider = WidgetTree->ConstructWidget<USlider>(USlider::StaticClass(), SliderName);
-		Slider->SetValue(0.0f);
+		Slider->SetValue(InitialValue);
 		SliderSize->SetContent(Slider);
 		Row->AddChildToHorizontalBox(SliderSize);
 
@@ -756,9 +877,11 @@ void RebuildColorPickerWidgetTree(UWidgetBlueprint* WidgetBlueprint)
 		}
 	};
 
-	AddSliderRow(FText::FromString(TEXT("R")), TEXT("RedSlider"));
-	AddSliderRow(FText::FromString(TEXT("G")), TEXT("GreenSlider"));
-	AddSliderRow(FText::FromString(TEXT("B")), TEXT("BlueSlider"));
+	AddSliderRow(FText::FromString(TEXT("R")), TEXT("RedSlider"), GetDefaultBrushColor().R);
+	AddSliderRow(FText::FromString(TEXT("G")), TEXT("GreenSlider"), GetDefaultBrushColor().G);
+	AddSliderRow(FText::FromString(TEXT("B")), TEXT("BlueSlider"), GetDefaultBrushColor().B);
+	AddSliderRow(FText::FromString(TEXT("Rgh")), TEXT("RoughnessSlider"), GetDefaultBrushRoughness());
+	AddSliderRow(FText::FromString(TEXT("Met")), TEXT("MetallicSlider"), GetDefaultBrushMetallic());
 
 	UButton* CommitButton = WidgetTree->ConstructWidget<UButton>(UButton::StaticClass(), TEXT("CommitButton"));
 	EnsureWidgetVariableGuid(WidgetBlueprint, CommitButton);
@@ -910,7 +1033,7 @@ UWidgetBlueprint* FindOrCreateBrushCursorWidgetBlueprint(UTexture2D* BrushCursor
 	return WidgetBlueprint;
 }
 
-void ConfigureBlueprints(UChameleonPainterInputConfig* InputConfig, UMaterialInterface* HiderMaterial, UTexture2D* BrushCursorTexture, UMaterialInterface* BrushCursorMaterial, UClass*& OutGameModeClass)
+void ConfigureBlueprints(UChameleonPainterInputConfig* InputConfig, UMaterialInterface* HiderMaterial, UMaterialInterface* PaintSprayMaterial, UTexture2D* BrushCursorTexture, UMaterialInterface* BrushCursorMaterial, UClass*& OutGameModeClass)
 {
 	UWidgetBlueprint* ColorPickerWidgetBlueprint = FindOrCreateColorPickerWidgetBlueprint();
 	UWidgetBlueprint* BrushCursorWidgetBlueprint = FindOrCreateBrushCursorWidgetBlueprint(BrushCursorTexture, BrushCursorMaterial);
@@ -924,6 +1047,8 @@ void ConfigureBlueprints(UChameleonPainterInputConfig* InputConfig, UMaterialInt
 		{
 			CharacterCDO->BodyComponent->BodyMaterial = HiderMaterial;
 			CharacterCDO->BodyComponent->CamouflageBaseColor = GetDefaultBodyColor();
+			CharacterCDO->BodyComponent->CamouflageBaseRoughness = GetDefaultBrushRoughness();
+			CharacterCDO->BodyComponent->CamouflageBaseMetallic = GetDefaultBrushMetallic();
 		}
 		if (CharacterCDO->PaintComponent)
 		{
@@ -939,7 +1064,11 @@ void ConfigureBlueprints(UChameleonPainterInputConfig* InputConfig, UMaterialInt
 		CharacterCDO->BrushCursorWidgetClass = BrushCursorWidgetBlueprint && BrushCursorWidgetBlueprint->GeneratedClass
 			? TSubclassOf<UUserWidget>(static_cast<UClass*>(BrushCursorWidgetBlueprint->GeneratedClass.Get()))
 			: TSubclassOf<UUserWidget>();
+		CharacterCDO->PaintSprayEffectClass = AChameleonPaintSprayActor::StaticClass();
+		CharacterCDO->PaintSprayMaterial = PaintSprayMaterial;
 		CharacterCDO->CurrentBrushColor = GetDefaultBrushColor();
+		CharacterCDO->CurrentBrushRoughness = GetDefaultBrushRoughness();
+		CharacterCDO->CurrentBrushMetallic = GetDefaultBrushMetallic();
 		CharacterCDO->MarkPackageDirty();
 		FBlueprintEditorUtils::MarkBlueprintAsModified(CharacterBlueprint);
 	}
@@ -1087,6 +1216,8 @@ bool CreateTestLevel(
 		{
 			PreviewBody->BodyComponent->BodyMaterial = LoadAssetByPackageName<UMaterial>(MaterialPath / TEXT("M_CPT_HiderPaint"));
 			PreviewBody->BodyComponent->CamouflageBaseColor = GetDefaultBodyColor();
+			PreviewBody->BodyComponent->CamouflageBaseRoughness = GetDefaultBrushRoughness();
+			PreviewBody->BodyComponent->CamouflageBaseMetallic = GetDefaultBrushMetallic();
 			PreviewBody->BodyComponent->bBuildQueryCollision = true;
 		}
 		if (PreviewBody->PaintComponent)
@@ -1140,6 +1271,7 @@ int32 UChameleonPainterBuildTestContentCommandlet::Main(const FString& Params)
 
 	const TMap<FName, UTexture2D*> Textures = ImportTextures();
 	UMaterial* HiderMaterial = CreateHiderPaintMaterial();
+	UMaterial* PaintSprayMaterial = CreatePaintSprayMaterial();
 	UMaterial* ConcreteMaterial = CreateSurfaceMaterial(
 		TEXT("M_CPT_Concrete"),
 		Textures.FindRef(TEXT("T_CPT_Concrete")),
@@ -1161,7 +1293,7 @@ int32 UChameleonPainterBuildTestContentCommandlet::Main(const FString& Params)
 	UTexture2D* BrushCursorTexture = ImportBrushCursorTexture();
 	UMaterial* BrushCursorMaterial = CreateBrushCursorMaterial(BrushCursorTexture);
 	UClass* GameModeClass = nullptr;
-	ConfigureBlueprints(InputConfig, HiderMaterial, BrushCursorTexture, BrushCursorMaterial, GameModeClass);
+	ConfigureBlueprints(InputConfig, HiderMaterial, PaintSprayMaterial, BrushCursorTexture, BrushCursorMaterial, GameModeClass);
 
 	const bool bCreatedLevel = CreateTestLevel(ConcreteMaterial, WoodMaterial, GreenMaterial, FloorMaterial, GameModeClass);
 	UEditorLoadingAndSavingUtils::SaveDirtyPackages(false, true);

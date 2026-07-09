@@ -40,6 +40,7 @@ void UChameleonColorPickerWidget::NativeConstruct()
 	BindGeneratedWidgetTree();
 	UpdateControlsFromSelectedColor();
 	ApplySelectedColor(false, false);
+	ApplySelectedMaterialProperties(false, false);
 }
 
 void UChameleonColorPickerWidget::BindGeneratedWidgetTree()
@@ -65,6 +66,14 @@ void UChameleonColorPickerWidget::BindGeneratedWidgetTree()
 	{
 		BlueSlider = Cast<USlider>(WidgetTree->FindWidget(FName(TEXT("BlueSlider"))));
 	}
+	if (!RoughnessSlider)
+	{
+		RoughnessSlider = Cast<USlider>(WidgetTree->FindWidget(FName(TEXT("RoughnessSlider"))));
+	}
+	if (!MetallicSlider)
+	{
+		MetallicSlider = Cast<USlider>(WidgetTree->FindWidget(FName(TEXT("MetallicSlider"))));
+	}
 	if (!CommitButton)
 	{
 		CommitButton = Cast<UButton>(WidgetTree->FindWidget(FName(TEXT("CommitButton"))));
@@ -81,6 +90,14 @@ void UChameleonColorPickerWidget::BindGeneratedWidgetTree()
 	if (BlueSlider)
 	{
 		BlueSlider->OnValueChanged.AddUniqueDynamic(this, &UChameleonColorPickerWidget::HandleBlueChanged);
+	}
+	if (RoughnessSlider)
+	{
+		RoughnessSlider->OnValueChanged.AddUniqueDynamic(this, &UChameleonColorPickerWidget::HandleRoughnessChanged);
+	}
+	if (MetallicSlider)
+	{
+		MetallicSlider->OnValueChanged.AddUniqueDynamic(this, &UChameleonColorPickerWidget::HandleMetallicChanged);
 	}
 	if (CommitButton)
 	{
@@ -160,6 +177,15 @@ void UChameleonColorPickerWidget::SetSelectedColor(FLinearColor NewColor, bool b
 	ApplySelectedColor(bBroadcast, false);
 }
 
+void UChameleonColorPickerWidget::SetSelectedMaterialProperties(float NewRoughness, float NewMetallic, bool bBroadcast)
+{
+	SelectedRoughness = FMath::Clamp(NewRoughness, 0.0f, 1.0f);
+	SelectedMetallic = FMath::Clamp(NewMetallic, 0.0f, 1.0f);
+
+	UpdateControlsFromSelectedColor();
+	ApplySelectedMaterialProperties(bBroadcast, false);
+}
+
 void UChameleonColorPickerWidget::SetTargetPaintComponent(UChameleonPaintComponent* NewTargetPaintComponent)
 {
 	TargetPaintComponent = NewTargetPaintComponent;
@@ -202,9 +228,34 @@ void UChameleonColorPickerWidget::HandleBlueChanged(float Value)
 	UpdateControlsFromSelectedColor();
 }
 
+void UChameleonColorPickerWidget::HandleRoughnessChanged(float Value)
+{
+	if (bUpdatingControls)
+	{
+		return;
+	}
+
+	SelectedRoughness = FMath::Clamp(Value, 0.0f, 1.0f);
+	ApplySelectedMaterialProperties(true, false);
+	UpdateControlsFromSelectedColor();
+}
+
+void UChameleonColorPickerWidget::HandleMetallicChanged(float Value)
+{
+	if (bUpdatingControls)
+	{
+		return;
+	}
+
+	SelectedMetallic = FMath::Clamp(Value, 0.0f, 1.0f);
+	ApplySelectedMaterialProperties(true, false);
+	UpdateControlsFromSelectedColor();
+}
+
 void UChameleonColorPickerWidget::HandleCommitClicked()
 {
 	ApplySelectedColor(true, true);
+	ApplySelectedMaterialProperties(true, true);
 }
 
 void UChameleonColorPickerWidget::HandleSwatch0Clicked()
@@ -298,7 +349,7 @@ void UChameleonColorPickerWidget::BuildDefaultWidgetTree()
 	{
 		UHorizontalBox* Row = WidgetTree->ConstructWidget<UHorizontalBox>(UHorizontalBox::StaticClass());
 		USizeBox* LabelSizeBox = WidgetTree->ConstructWidget<USizeBox>(USizeBox::StaticClass());
-		LabelSizeBox->SetWidthOverride(24.0f);
+		LabelSizeBox->SetWidthOverride(34.0f);
 		LabelSizeBox->SetContent(MakeLabel(Label));
 		Row->AddChildToHorizontalBox(LabelSizeBox);
 
@@ -311,6 +362,8 @@ void UChameleonColorPickerWidget::BuildDefaultWidgetTree()
 	RedSlider = AddSliderRow(FText::FromString(TEXT("R")), TEXT("RedSlider"));
 	GreenSlider = AddSliderRow(FText::FromString(TEXT("G")), TEXT("GreenSlider"));
 	BlueSlider = AddSliderRow(FText::FromString(TEXT("B")), TEXT("BlueSlider"));
+	RoughnessSlider = AddSliderRow(FText::FromString(TEXT("Rgh")), TEXT("RoughnessSlider"));
+	MetallicSlider = AddSliderRow(FText::FromString(TEXT("Met")), TEXT("MetallicSlider"));
 
 	if (RedSlider)
 	{
@@ -323,6 +376,14 @@ void UChameleonColorPickerWidget::BuildDefaultWidgetTree()
 	if (BlueSlider)
 	{
 		BlueSlider->OnValueChanged.AddDynamic(this, &UChameleonColorPickerWidget::HandleBlueChanged);
+	}
+	if (RoughnessSlider)
+	{
+		RoughnessSlider->OnValueChanged.AddDynamic(this, &UChameleonColorPickerWidget::HandleRoughnessChanged);
+	}
+	if (MetallicSlider)
+	{
+		MetallicSlider->OnValueChanged.AddDynamic(this, &UChameleonColorPickerWidget::HandleMetallicChanged);
 	}
 
 	CommitButton = WidgetTree->ConstructWidget<UButton>(UButton::StaticClass(), TEXT("CommitButton"));
@@ -349,6 +410,19 @@ void UChameleonColorPickerWidget::ApplySelectedColor(bool bBroadcast, bool bComm
 	}
 }
 
+void UChameleonColorPickerWidget::ApplySelectedMaterialProperties(bool bBroadcast, bool bCommit)
+{
+	if (bBroadcast)
+	{
+		OnMaterialPropertiesChanged.Broadcast(SelectedRoughness, SelectedMetallic);
+	}
+
+	if (bCommit)
+	{
+		OnMaterialPropertiesCommitted.Broadcast(SelectedRoughness, SelectedMetallic);
+	}
+}
+
 void UChameleonColorPickerWidget::UpdateControlsFromSelectedColor()
 {
 	TGuardValue<bool> UpdatingGuard(bUpdatingControls, true);
@@ -368,6 +442,14 @@ void UChameleonColorPickerWidget::UpdateControlsFromSelectedColor()
 	if (BlueSlider)
 	{
 		BlueSlider->SetValue(SelectedColor.B);
+	}
+	if (RoughnessSlider)
+	{
+		RoughnessSlider->SetValue(SelectedRoughness);
+	}
+	if (MetallicSlider)
+	{
+		MetallicSlider->SetValue(SelectedMetallic);
 	}
 }
 

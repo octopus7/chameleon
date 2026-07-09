@@ -11,6 +11,7 @@ class USlider;
 class UTextBlock;
 
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FChameleonColorPickerChanged, FLinearColor, Color);
+DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FChameleonPaintMaterialPropertiesChanged, float, Roughness, float, Metallic);
 
 UCLASS(BlueprintType, Blueprintable)
 class CHAMELEONPAINTER_API UChameleonColorPickerWidget : public UUserWidget
@@ -25,6 +26,9 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "Chameleon|Color Picker")
 	void SetSelectedColor(FLinearColor NewColor, bool bBroadcast = true);
 
+	UFUNCTION(BlueprintCallable, Category = "Chameleon|Color Picker")
+	void SetSelectedMaterialProperties(float NewRoughness, float NewMetallic, bool bBroadcast = true);
+
 	UFUNCTION(BlueprintPure, Category = "Chameleon|Color Picker")
 	FLinearColor GetSelectedColor() const { return SelectedColor; }
 
@@ -33,6 +37,12 @@ public:
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Chameleon|Color Picker")
 	FLinearColor SelectedColor = FLinearColor(1.0f, 0.02f, 0.02f, 1.0f);
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Chameleon|Color Picker", meta = (ClampMin = "0.0", ClampMax = "1.0"))
+	float SelectedRoughness = 0.84f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Chameleon|Color Picker", meta = (ClampMin = "0.0", ClampMax = "1.0"))
+	float SelectedMetallic = 0.0f;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Chameleon|Color Picker")
 	TArray<FLinearColor> SwatchColors;
@@ -49,6 +59,12 @@ public:
 	UPROPERTY(BlueprintAssignable, Category = "Chameleon|Color Picker")
 	FChameleonColorPickerChanged OnColorCommitted;
 
+	UPROPERTY(BlueprintAssignable, Category = "Chameleon|Color Picker")
+	FChameleonPaintMaterialPropertiesChanged OnMaterialPropertiesChanged;
+
+	UPROPERTY(BlueprintAssignable, Category = "Chameleon|Color Picker")
+	FChameleonPaintMaterialPropertiesChanged OnMaterialPropertiesCommitted;
+
 protected:
 	UFUNCTION()
 	void HandleRedChanged(float Value);
@@ -58,6 +74,12 @@ protected:
 
 	UFUNCTION()
 	void HandleBlueChanged(float Value);
+
+	UFUNCTION()
+	void HandleRoughnessChanged(float Value);
+
+	UFUNCTION()
+	void HandleMetallicChanged(float Value);
 
 	UFUNCTION()
 	void HandleCommitClicked();
@@ -100,6 +122,7 @@ private:
 	void BindGeneratedWidgetTree();
 	void BindSwatchButton(const FName& WidgetName, int32 SwatchIndex);
 	void ApplySelectedColor(bool bBroadcast, bool bCommit);
+	void ApplySelectedMaterialProperties(bool bBroadcast, bool bCommit);
 	void UpdateControlsFromSelectedColor();
 	void ChooseSwatch(int32 SwatchIndex);
 	UTextBlock* MakeLabel(const FText& Text);
@@ -117,6 +140,12 @@ private:
 
 	UPROPERTY(Transient, meta = (BindWidgetOptional))
 	TObjectPtr<USlider> BlueSlider;
+
+	UPROPERTY(Transient, meta = (BindWidgetOptional))
+	TObjectPtr<USlider> RoughnessSlider;
+
+	UPROPERTY(Transient, meta = (BindWidgetOptional))
+	TObjectPtr<USlider> MetallicSlider;
 
 	UPROPERTY(Transient, meta = (BindWidgetOptional))
 	TObjectPtr<UButton> CommitButton;

@@ -5,6 +5,7 @@
 #include "ChameleonMetaballBodyComponent.generated.h"
 
 class UMaterialInterface;
+class UTexture2D;
 
 USTRUCT(BlueprintType)
 struct FChameleonProceduralBone
@@ -49,6 +50,12 @@ struct FChameleonPaintStroke
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Chameleon|Paint")
 	FLinearColor Color = FLinearColor::White;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Chameleon|Paint", meta = (ClampMin = "0.0", ClampMax = "1.0"))
+	float Roughness = 0.84f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Chameleon|Paint", meta = (ClampMin = "0.0", ClampMax = "1.0"))
+	float Metallic = 0.0f;
 };
 
 struct FChameleonVertexSkinWeights
@@ -85,13 +92,22 @@ public:
 	bool ApplyPaintStrokeLocal(const FChameleonPaintStroke& Stroke);
 
 	UFUNCTION(BlueprintCallable, Category = "Chameleon|Paint")
-	bool ApplyPaintStrokeWorld(FVector WorldPosition, FVector WorldNormal, float RadiusCm, FLinearColor Color, float Strength = 1.0f);
+	bool ApplyPaintStrokeWorld(FVector WorldPosition, FVector WorldNormal, float RadiusCm, FLinearColor Color, float Strength = 1.0f, float Roughness = 0.84f, float Metallic = 0.0f);
 
 	UFUNCTION(BlueprintCallable, Category = "Chameleon|Paint")
-	bool ApplyPaintStrokeFromHit(const FHitResult& Hit, float RadiusCm, FLinearColor Color, float Strength = 1.0f);
+	bool ApplyPaintStrokeFromHit(const FHitResult& Hit, float RadiusCm, FLinearColor Color, float Strength = 1.0f, float Roughness = 0.84f, float Metallic = 0.0f);
 
 	UFUNCTION(BlueprintPure, Category = "Chameleon|Paint")
 	FLinearColor GetCamouflageBaseColor() const { return CamouflageBaseColor; }
+
+	UFUNCTION(BlueprintPure, Category = "Chameleon|Paint")
+	UTexture2D* GetBaseColorPaintTexture() const { return BaseColorPaintTexture; }
+
+	UFUNCTION(BlueprintPure, Category = "Chameleon|Paint")
+	UTexture2D* GetRoughnessPaintTexture() const { return RoughnessPaintTexture; }
+
+	UFUNCTION(BlueprintPure, Category = "Chameleon|Paint")
+	UTexture2D* GetMetallicPaintTexture() const { return MetallicPaintTexture; }
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Chameleon|Body", meta = (ClampMin = "8", ClampMax = "96"))
 	FIntVector GridResolution;
@@ -108,8 +124,29 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Chameleon|Paint")
 	FLinearColor CamouflageBaseColor = FLinearColor::White;
 
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Chameleon|Paint", meta = (ClampMin = "0.0", ClampMax = "1.0"))
+	float CamouflageBaseRoughness = 0.84f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Chameleon|Paint", meta = (ClampMin = "0.0", ClampMax = "1.0"))
+	float CamouflageBaseMetallic = 0.0f;
+
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Chameleon|Paint")
 	TArray<FName> PaintColorParameterNames;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Chameleon|Paint|Texture", meta = (ClampMin = "128", ClampMax = "4096", UIMin = "512", UIMax = "2048"))
+	int32 PaintTextureSize = 1024;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Chameleon|Paint|Texture", meta = (ClampMin = "1.0", UIMin = "1.0", UIMax = "16.0"))
+	float MinimumPaintBrushRadiusPixels = 2.0f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Chameleon|Paint|Texture")
+	TArray<FName> BaseColorTextureParameterNames;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Chameleon|Paint|Texture")
+	TArray<FName> RoughnessTextureParameterNames;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Chameleon|Paint|Texture")
+	TArray<FName> MetallicTextureParameterNames;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Chameleon|Material")
 	TObjectPtr<UMaterialInterface> BodyMaterial;
@@ -140,6 +177,17 @@ public:
 
 private:
 	void ApplyMaterialPaintParameters();
+	void EnsureBaseColorPaintTexture();
+	void EnsureRoughnessPaintTexture();
+	void EnsureMetallicPaintTexture();
+	void ResetBaseColorPaintTexture();
+	void ResetRoughnessPaintTexture();
+	void ResetMetallicPaintTexture();
+	void UpdateBaseColorPaintTexture();
+	void UpdateRoughnessPaintTexture();
+	void UpdateMetallicPaintTexture();
+	bool TryGetPaintUvFromHit(const FHitResult& Hit, FVector2D& OutUv, float& OutUvRadiusPerCm) const;
+	bool ApplyMaterialTextureStroke(FVector2D Uv, float RadiusCm, float UvRadiusPerCm, FLinearColor Color, float Roughness, float Metallic, float Strength, float Falloff);
 	void RebuildVertexColors();
 	void UpdatePaintedMeshSection();
 	void BuildProceduralSkeleton();
@@ -164,6 +212,15 @@ private:
 	TArray<FTransform> RestGlobalBoneTransforms;
 	TArray<FTransform> PoseGlobalBoneTransforms;
 	TArray<FChameleonPaintStroke> PaintStrokes;
+	UPROPERTY(Transient)
+	TObjectPtr<UTexture2D> BaseColorPaintTexture;
+	UPROPERTY(Transient)
+	TObjectPtr<UTexture2D> RoughnessPaintTexture;
+	UPROPERTY(Transient)
+	TObjectPtr<UTexture2D> MetallicPaintTexture;
+	TArray<FColor> BaseColorPaintPixels;
+	TArray<FColor> RoughnessPaintPixels;
+	TArray<FColor> MetallicPaintPixels;
 
 	float WalkPhaseRadians = 0.0f;
 	float WalkBlendAlpha = 0.0f;
