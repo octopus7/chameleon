@@ -10,29 +10,29 @@ const threshold = 0.62;
 const scaleToCm = 58.0;
 
 const blobs = [
-  { c: [0.0, 0.0, 2.66], r: [0.42, 0.42, 0.44], s: 1.06 },
-  { c: [0.0, 0.0, 2.22], r: [0.20, 0.24, 0.28], s: 0.82 },
-  { c: [0.0, 0.0, 1.72], r: [0.43, 0.42, 0.58], s: 1.00 },
-  { c: [0.02, 0.0, 1.18], r: [0.42, 0.36, 0.50], s: 0.90 },
-  { c: [0.0, 0.0, 0.78], r: [0.42, 0.44, 0.30], s: 0.82 },
+  { c: [0.0, 0.0, 2.66], r: [0.42, 0.42, 0.44], s: 1.06, bone: "Head" },
+  { c: [0.0, 0.0, 2.22], r: [0.20, 0.24, 0.28], s: 0.82, bone: "Neck" },
+  { c: [0.0, 0.0, 1.72], r: [0.43, 0.42, 0.58], s: 1.00, bone: "UpperTorso" },
+  { c: [0.02, 0.0, 1.18], r: [0.42, 0.36, 0.50], s: 0.90, bone: "LowerTorso" },
+  { c: [0.0, 0.0, 0.78], r: [0.42, 0.44, 0.30], s: 0.82, bone: "Root" },
 
-  { c: [0.0, -0.48, 1.88], r: [0.22, 0.28, 0.23], s: 0.76 },
-  { c: [0.0, -0.76, 1.88], r: [0.18, 0.34, 0.18], s: 0.92 },
-  { c: [0.0, -1.08, 1.88], r: [0.18, 0.32, 0.18], s: 0.92 },
-  { c: [0.0, -1.39, 1.88], r: [0.17, 0.34, 0.17], s: 0.90 },
-  { c: [0.0, -1.64, 1.88], r: [0.17, 0.22, 0.17], s: 0.78 },
-  { c: [0.0, 0.48, 1.88], r: [0.22, 0.28, 0.23], s: 0.76 },
-  { c: [0.0, 0.76, 1.88], r: [0.18, 0.34, 0.18], s: 0.92 },
-  { c: [0.0, 1.08, 1.88], r: [0.18, 0.32, 0.18], s: 0.92 },
-  { c: [0.0, 1.39, 1.88], r: [0.17, 0.34, 0.17], s: 0.90 },
-  { c: [0.0, 1.64, 1.88], r: [0.17, 0.22, 0.17], s: 0.78 },
+  { c: [0.0, -0.48, 1.88], r: [0.22, 0.28, 0.23], s: 0.76, bone: "LeftUpperArm" },
+  { c: [0.0, -0.76, 1.88], r: [0.18, 0.34, 0.18], s: 0.92, bone: "LeftUpperArm" },
+  { c: [0.0, -1.08, 1.88], r: [0.18, 0.32, 0.18], s: 0.92, bone: "LeftLowerArm" },
+  { c: [0.0, -1.39, 1.88], r: [0.17, 0.34, 0.17], s: 0.90, bone: "LeftLowerArm" },
+  { c: [0.0, -1.64, 1.88], r: [0.17, 0.22, 0.17], s: 0.78, bone: "LeftLowerArm" },
+  { c: [0.0, 0.48, 1.88], r: [0.22, 0.28, 0.23], s: 0.76, bone: "RightUpperArm" },
+  { c: [0.0, 0.76, 1.88], r: [0.18, 0.34, 0.18], s: 0.92, bone: "RightUpperArm" },
+  { c: [0.0, 1.08, 1.88], r: [0.18, 0.32, 0.18], s: 0.92, bone: "RightLowerArm" },
+  { c: [0.0, 1.39, 1.88], r: [0.17, 0.34, 0.17], s: 0.90, bone: "RightLowerArm" },
+  { c: [0.0, 1.64, 1.88], r: [0.17, 0.22, 0.17], s: 0.78, bone: "RightLowerArm" },
 
-  { c: [0.0, -0.24, 0.48], r: [0.24, 0.22, 0.46], s: 0.92 },
-  { c: [0.0, -0.30, 0.12], r: [0.21, 0.19, 0.38], s: 0.88 },
-  { c: [0.13, -0.31, -0.05], r: [0.34, 0.17, 0.14], s: 0.72 },
-  { c: [0.0, 0.24, 0.48], r: [0.24, 0.22, 0.46], s: 0.92 },
-  { c: [0.0, 0.30, 0.12], r: [0.21, 0.19, 0.38], s: 0.88 },
-  { c: [0.13, 0.31, -0.05], r: [0.34, 0.17, 0.14], s: 0.72 },
+  { c: [0.0, -0.24, 0.48], r: [0.24, 0.22, 0.46], s: 0.92, bone: "LeftUpperLeg" },
+  { c: [0.0, -0.30, 0.12], r: [0.21, 0.19, 0.38], s: 0.88, bone: "LeftLowerLeg" },
+  { c: [0.13, -0.31, -0.05], r: [0.34, 0.17, 0.14], s: 0.72, bone: "LeftLowerLeg" },
+  { c: [0.0, 0.24, 0.48], r: [0.24, 0.22, 0.46], s: 0.92, bone: "RightUpperLeg" },
+  { c: [0.0, 0.30, 0.12], r: [0.21, 0.19, 0.38], s: 0.88, bone: "RightLowerLeg" },
+  { c: [0.13, 0.31, -0.05], r: [0.34, 0.17, 0.14], s: 0.72, bone: "RightLowerLeg" },
 ];
 
 const bounds = {
@@ -118,6 +118,248 @@ function cross(a, b) {
 
 function dot(a, b) {
   return a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
+}
+
+function isLeftLimbBone(bone) {
+  return bone === "LeftUpperArm"
+    || bone === "LeftLowerArm"
+    || bone === "LeftUpperLeg"
+    || bone === "LeftLowerLeg";
+}
+
+function isRightLimbBone(bone) {
+  return bone === "RightUpperArm"
+    || bone === "RightLowerArm"
+    || bone === "RightUpperLeg"
+    || bone === "RightLowerLeg";
+}
+
+function isArmBone(bone) {
+  return bone === "LeftUpperArm"
+    || bone === "LeftLowerArm"
+    || bone === "RightUpperArm"
+    || bone === "RightLowerArm";
+}
+
+function isLegBone(bone) {
+  return bone === "LeftUpperLeg"
+    || bone === "LeftLowerLeg"
+    || bone === "RightUpperLeg"
+    || bone === "RightLowerLeg";
+}
+
+function smoothStep01(value) {
+  const t = Math.min(Math.max(value, 0.0), 1.0);
+  return t * t * (3.0 - 2.0 * t);
+}
+
+function sameSideGate(bone, p) {
+  const side = p[1];
+  const absSide = Math.abs(side);
+
+  if ((isLeftLimbBone(bone) && side > -0.015) || (isRightLimbBone(bone) && side < 0.015)) {
+    return 0.0;
+  }
+
+  if (isArmBone(bone)) {
+    return smoothStep01((absSide - 0.25) / 0.20);
+  }
+
+  if (isLegBone(bone)) {
+    return smoothStep01((absSide - 0.08) / 0.16);
+  }
+
+  return 1.0;
+}
+
+function dominantBoneAt(p) {
+  let dominantBone = "Root";
+  let bestContribution = 0.0;
+
+  for (const blob of blobs) {
+    const gate = sameSideGate(blob.bone, p);
+    if (gate <= 1e-8) {
+      continue;
+    }
+
+    const dx = (p[0] - blob.c[0]) / blob.r[0];
+    const dy = (p[1] - blob.c[1]) / blob.r[1];
+    const dz = (p[2] - blob.c[2]) / blob.r[2];
+    const contribution = blob.s * Math.exp(-(dx * dx + dy * dy + dz * dz)) * gate;
+    if (contribution > bestContribution) {
+      bestContribution = contribution;
+      dominantBone = blob.bone;
+    }
+  }
+
+  return dominantBone;
+}
+
+const uvIslands = [
+  "HeadFront",
+  "HeadBack",
+  "HeadLeft",
+  "HeadRight",
+  "TorsoFront",
+  "TorsoBack",
+  "TorsoLeft",
+  "TorsoRight",
+  "LeftArmFront",
+  "LeftArmBack",
+  "LeftArmTop",
+  "LeftArmBottom",
+  "RightArmFront",
+  "RightArmBack",
+  "RightArmTop",
+  "RightArmBottom",
+  "LeftLegFront",
+  "LeftLegBack",
+  "LeftLegOuter",
+  "LeftLegInner",
+  "RightLegFront",
+  "RightLegBack",
+  "RightLegOuter",
+  "RightLegInner",
+];
+
+function selectFourWayBodyIsland(normal, front, back, left, right) {
+  if (Math.abs(normal[0]) >= Math.abs(normal[1])) {
+    return normal[0] >= 0.0 ? front : back;
+  }
+
+  return normal[1] < 0.0 ? left : right;
+}
+
+function selectUvIsland(p, normal) {
+  const bone = dominantBoneAt(p);
+
+  if (bone === "Head" || (bone === "Neck" && p[2] >= 2.16)) {
+    return selectFourWayBodyIsland(normal, "HeadFront", "HeadBack", "HeadLeft", "HeadRight");
+  }
+
+  if (isArmBone(bone)) {
+    const leftArm = isLeftLimbBone(bone);
+    if (Math.abs(normal[0]) >= Math.abs(normal[2])) {
+      if (leftArm) {
+        return normal[0] >= 0.0 ? "LeftArmFront" : "LeftArmBack";
+      }
+
+      return normal[0] >= 0.0 ? "RightArmFront" : "RightArmBack";
+    }
+
+    if (leftArm) {
+      return normal[2] >= 0.0 ? "LeftArmTop" : "LeftArmBottom";
+    }
+
+    return normal[2] >= 0.0 ? "RightArmTop" : "RightArmBottom";
+  }
+
+  if (isLegBone(bone)) {
+    const leftLeg = isLeftLimbBone(bone);
+    if (Math.abs(normal[0]) >= Math.abs(normal[1])) {
+      if (leftLeg) {
+        return normal[0] >= 0.0 ? "LeftLegFront" : "LeftLegBack";
+      }
+
+      return normal[0] >= 0.0 ? "RightLegFront" : "RightLegBack";
+    }
+
+    if (leftLeg) {
+      return normal[1] < 0.0 ? "LeftLegOuter" : "LeftLegInner";
+    }
+
+    return normal[1] > 0.0 ? "RightLegOuter" : "RightLegInner";
+  }
+
+  return selectFourWayBodyIsland(normal, "TorsoFront", "TorsoBack", "TorsoLeft", "TorsoRight");
+}
+
+function normalizeRange(value, min, max) {
+  return Math.min(Math.max((value - min) / Math.max(max - min, 0.001), 0.0), 1.0);
+}
+
+function localUvForIsland(island, p) {
+  switch (island) {
+    case "HeadFront":
+    case "HeadBack":
+      return [normalizeRange(p[1], -0.48, 0.48), normalizeRange(p[2], 2.14, 3.08)];
+
+    case "HeadLeft":
+    case "HeadRight":
+      return [normalizeRange(p[0], -0.48, 0.48), normalizeRange(p[2], 2.14, 3.08)];
+
+    case "TorsoFront":
+    case "TorsoBack":
+      return [normalizeRange(p[1], -0.58, 0.58), normalizeRange(p[2], 0.42, 2.36)];
+
+    case "TorsoLeft":
+    case "TorsoRight":
+      return [normalizeRange(p[0], -0.56, 0.58), normalizeRange(p[2], 0.42, 2.36)];
+
+    case "LeftArmFront":
+    case "LeftArmBack":
+      return [normalizeRange(p[1], -1.76, -0.40), normalizeRange(p[2], 1.54, 2.20)];
+
+    case "RightArmFront":
+    case "RightArmBack":
+      return [normalizeRange(p[1], 0.40, 1.76), normalizeRange(p[2], 1.54, 2.20)];
+
+    case "LeftArmTop":
+    case "LeftArmBottom":
+      return [normalizeRange(p[1], -1.76, -0.40), normalizeRange(p[0], -0.30, 0.30)];
+
+    case "RightArmTop":
+    case "RightArmBottom":
+      return [normalizeRange(p[1], 0.40, 1.76), normalizeRange(p[0], -0.30, 0.30)];
+
+    case "LeftLegFront":
+    case "LeftLegBack":
+      return [normalizeRange(p[1], -0.54, -0.06), normalizeRange(p[2], -0.16, 0.88)];
+
+    case "RightLegFront":
+    case "RightLegBack":
+      return [normalizeRange(p[1], 0.06, 0.54), normalizeRange(p[2], -0.16, 0.88)];
+
+    case "LeftLegOuter":
+    case "LeftLegInner":
+    case "RightLegOuter":
+    case "RightLegInner":
+      return [normalizeRange(p[0], -0.34, 0.56), normalizeRange(p[2], -0.16, 0.88)];
+
+    default:
+      return [0.5, 0.5];
+  }
+}
+
+function packUvIsland(island, uv) {
+  const columns = 6;
+  const rows = 4;
+  const marginU = 0.010;
+  const marginV = 0.014;
+  const islandIndex = Math.max(uvIslands.indexOf(island), 0);
+  const column = islandIndex % columns;
+  const row = Math.floor(islandIndex / columns);
+  const cellWidth = 1.0 / columns;
+  const cellHeight = 1.0 / rows;
+  const innerWidth = cellWidth - marginU * 2.0;
+  const innerHeight = cellHeight - marginV * 2.0;
+
+  return [
+    column * cellWidth + marginU + uv[0] * innerWidth,
+    row * cellHeight + marginV + uv[1] * innerHeight,
+  ];
+}
+
+function unwrappedUv(island, p) {
+  return packUvIsland(island, localUvForIsland(island, p));
+}
+
+function average(points) {
+  return [
+    (points[0][0] + points[1][0] + points[2][0]) / 3.0,
+    (points[0][1] + points[1][1] + points[2][1]) / 3.0,
+    (points[0][2] + points[1][2] + points[2][2]) / 3.0,
+  ];
 }
 
 function interpolate(a, b) {
@@ -231,20 +473,23 @@ function exportObj(faces) {
 
   const vertices = [];
   const normals = [];
+  const uvs = [];
   const indicesByKey = new Map();
   const faceIndices = [];
 
   for (const face of faces) {
     const indices = [];
+    const island = selectUvIsland(average(face), gradientAt(average(face)));
 
     for (const p of face) {
       const shifted = [p[0], p[1], p[2] - minZ];
-      const key = vertexKey(shifted);
+      const key = `${vertexKey(shifted)},${island}`;
       let index = indicesByKey.get(key);
 
       if (index === undefined) {
         vertices.push(shifted);
         normals.push(gradientAt(p));
+        uvs.push(unwrappedUv(island, p));
         index = vertices.length;
         indicesByKey.set(key, index);
       }
@@ -269,12 +514,16 @@ function exportObj(faces) {
     );
   }
 
+  for (const uv of uvs) {
+    lines.push(`vt ${uv[0].toFixed(6)} ${uv[1].toFixed(6)}`);
+  }
+
   for (const n of normals) {
     lines.push(`vn ${n[0].toFixed(6)} ${n[1].toFixed(6)} ${n[2].toFixed(6)}`);
   }
 
   for (const face of faceIndices) {
-    lines.push(`f ${face.map((i) => `${i}//${i}`).join(" ")}`);
+    lines.push(`f ${face.map((i) => `${i}/${i}/${i}`).join(" ")}`);
   }
 
   writeFileSync(objPath, `${lines.join("\n")}\n`, "utf8");

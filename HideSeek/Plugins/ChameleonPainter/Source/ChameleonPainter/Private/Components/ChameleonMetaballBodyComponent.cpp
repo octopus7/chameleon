@@ -50,6 +50,35 @@ struct FImplicitTriangle
 	FVector Points[3];
 };
 
+enum class EChameleonUvIsland : uint8
+{
+	HeadFront,
+	HeadBack,
+	HeadLeft,
+	HeadRight,
+	TorsoFront,
+	TorsoBack,
+	TorsoLeft,
+	TorsoRight,
+	LeftArmFront,
+	LeftArmBack,
+	LeftArmTop,
+	LeftArmBottom,
+	RightArmFront,
+	RightArmBack,
+	RightArmTop,
+	RightArmBottom,
+	LeftLegFront,
+	LeftLegBack,
+	LeftLegOuter,
+	LeftLegInner,
+	RightLegFront,
+	RightLegBack,
+	RightLegOuter,
+	RightLegInner,
+	Count
+};
+
 const FBodyBlob BodyBlobs[] = {
 	{ FVector(0.0, 0.0, 2.66), FVector(0.42, 0.42, 0.44), 1.06, EChameleonProceduralBoneSlot::Head },
 	{ FVector(0.0, 0.0, 2.22), FVector(0.20, 0.24, 0.28), 0.82, EChameleonProceduralBoneSlot::Neck },
@@ -412,6 +441,217 @@ FChameleonVertexSkinWeights MakeSkinWeightsForFieldPoint(const FVector& UnitPoin
 	NormalizeSkinWeights(SkinWeights);
 	return SkinWeights;
 }
+
+EChameleonProceduralBoneSlot GetDominantBoneForFieldPoint(const FVector& UnitPoint)
+{
+	EChameleonProceduralBoneSlot DominantBone = EChameleonProceduralBoneSlot::Root;
+	float BestContribution = 0.0f;
+
+	for (const FBodyBlob& Blob : BodyBlobs)
+	{
+		const float Gate = GetSameSideGate(Blob.Bone, UnitPoint);
+		if (Gate <= UE_SMALL_NUMBER)
+		{
+			continue;
+		}
+
+		const float Contribution = static_cast<float>(BlobValueAt(Blob, UnitPoint)) * Gate;
+		if (Contribution > BestContribution)
+		{
+			BestContribution = Contribution;
+			DominantBone = Blob.Bone;
+		}
+	}
+
+	return DominantBone;
+}
+
+float NormalizeUvRange(double Value, double Min, double Max)
+{
+	const double Denominator = FMath::Max(Max - Min, 0.001);
+	return FMath::Clamp(static_cast<float>((Value - Min) / Denominator), 0.0f, 1.0f);
+}
+
+FVector2D PackUvIsland(EChameleonUvIsland Island, const FVector2D& LocalUv)
+{
+	constexpr int32 Columns = 6;
+	constexpr int32 Rows = 4;
+	constexpr float MarginU = 0.010f;
+	constexpr float MarginV = 0.014f;
+
+	const int32 IslandIndex = FMath::Clamp(static_cast<int32>(Island), 0, static_cast<int32>(EChameleonUvIsland::Count) - 1);
+	const int32 Column = IslandIndex % Columns;
+	const int32 Row = IslandIndex / Columns;
+	const FVector2D CellSize(1.0f / static_cast<float>(Columns), 1.0f / static_cast<float>(Rows));
+	const FVector2D CellMin(CellSize.X * static_cast<float>(Column), CellSize.Y * static_cast<float>(Row));
+	const FVector2D InnerMin = CellMin + FVector2D(MarginU, MarginV);
+	const FVector2D InnerSize = CellSize - FVector2D(MarginU * 2.0f, MarginV * 2.0f);
+	const FVector2D ClampedUv(FMath::Clamp(LocalUv.X, 0.0f, 1.0f), FMath::Clamp(LocalUv.Y, 0.0f, 1.0f));
+
+	return InnerMin + FVector2D(InnerSize.X * ClampedUv.X, InnerSize.Y * ClampedUv.Y);
+}
+
+EChameleonUvIsland SelectFourWayBodyIsland(
+	const FVector& Normal,
+	EChameleonUvIsland Front,
+	EChameleonUvIsland Back,
+	EChameleonUvIsland Left,
+	EChameleonUvIsland Right)
+{
+	if (FMath::Abs(Normal.X) >= FMath::Abs(Normal.Y))
+	{
+		return Normal.X >= 0.0 ? Front : Back;
+	}
+
+	return Normal.Y < 0.0 ? Left : Right;
+}
+
+EChameleonUvIsland SelectUvIslandForTriangle(const FVector& UnitPoint, const FVector& Normal)
+{
+	const EChameleonProceduralBoneSlot DominantBone = GetDominantBoneForFieldPoint(UnitPoint);
+
+	if (DominantBone == EChameleonProceduralBoneSlot::Head
+		|| (DominantBone == EChameleonProceduralBoneSlot::Neck && UnitPoint.Z >= 2.16))
+	{
+		return SelectFourWayBodyIsland(
+			Normal,
+			EChameleonUvIsland::HeadFront,
+			EChameleonUvIsland::HeadBack,
+			EChameleonUvIsland::HeadLeft,
+			EChameleonUvIsland::HeadRight);
+	}
+
+	if (IsArmBone(DominantBone))
+	{
+		const bool bLeftArm = IsLeftLimbBone(DominantBone);
+		if (FMath::Abs(Normal.X) >= FMath::Abs(Normal.Z))
+		{
+			if (bLeftArm)
+			{
+				return Normal.X >= 0.0 ? EChameleonUvIsland::LeftArmFront : EChameleonUvIsland::LeftArmBack;
+			}
+
+			return Normal.X >= 0.0 ? EChameleonUvIsland::RightArmFront : EChameleonUvIsland::RightArmBack;
+		}
+
+		if (bLeftArm)
+		{
+			return Normal.Z >= 0.0 ? EChameleonUvIsland::LeftArmTop : EChameleonUvIsland::LeftArmBottom;
+		}
+
+		return Normal.Z >= 0.0 ? EChameleonUvIsland::RightArmTop : EChameleonUvIsland::RightArmBottom;
+	}
+
+	if (IsLegBone(DominantBone))
+	{
+		const bool bLeftLeg = IsLeftLimbBone(DominantBone);
+		if (FMath::Abs(Normal.X) >= FMath::Abs(Normal.Y))
+		{
+			if (bLeftLeg)
+			{
+				return Normal.X >= 0.0 ? EChameleonUvIsland::LeftLegFront : EChameleonUvIsland::LeftLegBack;
+			}
+
+			return Normal.X >= 0.0 ? EChameleonUvIsland::RightLegFront : EChameleonUvIsland::RightLegBack;
+		}
+
+		if (bLeftLeg)
+		{
+			return Normal.Y < 0.0 ? EChameleonUvIsland::LeftLegOuter : EChameleonUvIsland::LeftLegInner;
+		}
+
+		return Normal.Y > 0.0 ? EChameleonUvIsland::RightLegOuter : EChameleonUvIsland::RightLegInner;
+	}
+
+	return SelectFourWayBodyIsland(
+		Normal,
+		EChameleonUvIsland::TorsoFront,
+		EChameleonUvIsland::TorsoBack,
+		EChameleonUvIsland::TorsoLeft,
+		EChameleonUvIsland::TorsoRight);
+}
+
+FVector2D ComputeLocalUvForIsland(EChameleonUvIsland Island, const FVector& UnitPoint)
+{
+	switch (Island)
+	{
+	case EChameleonUvIsland::HeadFront:
+	case EChameleonUvIsland::HeadBack:
+		return FVector2D(
+			NormalizeUvRange(UnitPoint.Y, -0.48, 0.48),
+			NormalizeUvRange(UnitPoint.Z, 2.14, 3.08));
+
+	case EChameleonUvIsland::HeadLeft:
+	case EChameleonUvIsland::HeadRight:
+		return FVector2D(
+			NormalizeUvRange(UnitPoint.X, -0.48, 0.48),
+			NormalizeUvRange(UnitPoint.Z, 2.14, 3.08));
+
+	case EChameleonUvIsland::TorsoFront:
+	case EChameleonUvIsland::TorsoBack:
+		return FVector2D(
+			NormalizeUvRange(UnitPoint.Y, -0.58, 0.58),
+			NormalizeUvRange(UnitPoint.Z, 0.42, 2.36));
+
+	case EChameleonUvIsland::TorsoLeft:
+	case EChameleonUvIsland::TorsoRight:
+		return FVector2D(
+			NormalizeUvRange(UnitPoint.X, -0.56, 0.58),
+			NormalizeUvRange(UnitPoint.Z, 0.42, 2.36));
+
+	case EChameleonUvIsland::LeftArmFront:
+	case EChameleonUvIsland::LeftArmBack:
+		return FVector2D(
+			NormalizeUvRange(UnitPoint.Y, -1.76, -0.40),
+			NormalizeUvRange(UnitPoint.Z, 1.54, 2.20));
+
+	case EChameleonUvIsland::RightArmFront:
+	case EChameleonUvIsland::RightArmBack:
+		return FVector2D(
+			NormalizeUvRange(UnitPoint.Y, 0.40, 1.76),
+			NormalizeUvRange(UnitPoint.Z, 1.54, 2.20));
+
+	case EChameleonUvIsland::LeftArmTop:
+	case EChameleonUvIsland::LeftArmBottom:
+		return FVector2D(
+			NormalizeUvRange(UnitPoint.Y, -1.76, -0.40),
+			NormalizeUvRange(UnitPoint.X, -0.30, 0.30));
+
+	case EChameleonUvIsland::RightArmTop:
+	case EChameleonUvIsland::RightArmBottom:
+		return FVector2D(
+			NormalizeUvRange(UnitPoint.Y, 0.40, 1.76),
+			NormalizeUvRange(UnitPoint.X, -0.30, 0.30));
+
+	case EChameleonUvIsland::LeftLegFront:
+	case EChameleonUvIsland::LeftLegBack:
+		return FVector2D(
+			NormalizeUvRange(UnitPoint.Y, -0.54, -0.06),
+			NormalizeUvRange(UnitPoint.Z, -0.16, 0.88));
+
+	case EChameleonUvIsland::RightLegFront:
+	case EChameleonUvIsland::RightLegBack:
+		return FVector2D(
+			NormalizeUvRange(UnitPoint.Y, 0.06, 0.54),
+			NormalizeUvRange(UnitPoint.Z, -0.16, 0.88));
+
+	case EChameleonUvIsland::LeftLegOuter:
+	case EChameleonUvIsland::LeftLegInner:
+	case EChameleonUvIsland::RightLegOuter:
+	case EChameleonUvIsland::RightLegInner:
+		return FVector2D(
+			NormalizeUvRange(UnitPoint.X, -0.34, 0.56),
+			NormalizeUvRange(UnitPoint.Z, -0.16, 0.88));
+
+	default:
+		return FVector2D(0.5f, 0.5f);
+	}
+}
+
+FVector2D ComputeUnwrappedUv(EChameleonUvIsland Island, const FVector& UnitPoint)
+{
+	return PackUvIsland(Island, ComputeLocalUvForIsland(Island, UnitPoint));
+}
 }
 
 UChameleonMetaballBodyComponent::UChameleonMetaballBodyComponent(const FObjectInitializer& ObjectInitializer)
@@ -511,17 +751,13 @@ void UChameleonMetaballBodyComponent::GenerateBody()
 	}
 
 	double MinZ = TNumericLimits<double>::Max();
-	double MaxZ = TNumericLimits<double>::Lowest();
 	for (const FImplicitTriangle& Triangle : ImplicitTriangles)
 	{
 		for (const FVector& Point : Triangle.Points)
 		{
 			MinZ = FMath::Min(MinZ, Point.Z);
-			MaxZ = FMath::Max(MaxZ, Point.Z);
 		}
 	}
-
-	const double Height = FMath::Max(MaxZ - MinZ, 0.001);
 
 	CachedVertices.Reset();
 	CachedTriangles.Reset();
@@ -538,11 +774,11 @@ void UChameleonMetaballBodyComponent::GenerateBody()
 	TMap<FString, int32> VertexIndices;
 	VertexIndices.Reserve(ImplicitTriangles.Num());
 
-	auto AddVertex = [&](const FVector& UnitPoint) -> int32
+	auto AddVertex = [&](const FVector& UnitPoint, EChameleonUvIsland UvIsland) -> int32
 	{
 		const FVector ShiftedUnit(UnitPoint.X, UnitPoint.Y, UnitPoint.Z - MinZ);
 		const FVector PositionCm = ShiftedUnit * MeshScaleToCentimeters;
-		const FString Key = FString::Printf(TEXT("%.3f,%.3f,%.3f"), PositionCm.X, PositionCm.Y, PositionCm.Z);
+		const FString Key = FString::Printf(TEXT("%.3f,%.3f,%.3f,%d"), PositionCm.X, PositionCm.Y, PositionCm.Z, static_cast<int32>(UvIsland));
 
 		if (const int32* ExistingIndex = VertexIndices.Find(Key))
 		{
@@ -550,14 +786,13 @@ void UChameleonMetaballBodyComponent::GenerateBody()
 		}
 
 		const FVector Normal = FieldGradientAt(UnitPoint);
-		const double U = FMath::Atan2(UnitPoint.Y, UnitPoint.X) / (2.0 * UE_DOUBLE_PI) + 0.5;
-		const double V = (UnitPoint.Z - MinZ) / Height;
+		const FVector2D UnwrappedUv = ComputeUnwrappedUv(UvIsland, UnitPoint);
 		const int32 NewIndex = CachedVertices.Num();
 
 		VertexIndices.Add(Key, NewIndex);
 		CachedVertices.Add(PositionCm);
 		CachedNormals.Add(Normal);
-		CachedUV0.Add(FVector2D(U, V));
+		CachedUV0.Add(UnwrappedUv);
 		CachedVertexColors.Add(CamouflageBaseColor);
 		CachedTangents.Add(MakeTangentFromNormal(Normal));
 		CachedSkinWeights.Add(MakeSkinWeightsForFieldPoint(UnitPoint));
@@ -566,9 +801,12 @@ void UChameleonMetaballBodyComponent::GenerateBody()
 
 	for (const FImplicitTriangle& Triangle : ImplicitTriangles)
 	{
-		CachedTriangles.Add(AddVertex(Triangle.Points[0]));
-		CachedTriangles.Add(AddVertex(Triangle.Points[1]));
-		CachedTriangles.Add(AddVertex(Triangle.Points[2]));
+		const FVector TriangleCenter = (Triangle.Points[0] + Triangle.Points[1] + Triangle.Points[2]) / 3.0;
+		const EChameleonUvIsland UvIsland = SelectUvIslandForTriangle(TriangleCenter, FieldGradientAt(TriangleCenter));
+
+		CachedTriangles.Add(AddVertex(Triangle.Points[0], UvIsland));
+		CachedTriangles.Add(AddVertex(Triangle.Points[1], UvIsland));
+		CachedTriangles.Add(AddVertex(Triangle.Points[2], UvIsland));
 	}
 
 	AnimatedVertices = CachedVertices;
