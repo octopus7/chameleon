@@ -130,3 +130,20 @@
 - 현재 `HideSeek` 게임 상태를 기준으로 EOS 적용 계획 문서 `Docs/eos-integration-plan.md`를 작성했다.
 - 문서에는 현재 로컬 단일 플레이/채색 프로토타입 상태, 미구현 멀티플레이 요소, EOS 적용 전 선행 복제 작업, EOS 플러그인/설정/Developer Portal 단계, 세션/로비 연결 계획, 검증 계획과 리스크를 정리했다.
 - 공식 EOS 서비스/라이선스/시작 페이지 기준으로 무료 사용 범위, Developer Portal 설정 필요성, 콘솔 SDK 접근 요청 필요성을 반영했다.
+## 2026-07-09 12:43:06 (소요시간: 00:00:25)
+
+- 페인트 모드 진입 키를 `Tab`이 아니라 `F`로 바꾸는 요구와, 제공된 레퍼런스 이미지와 같은 페인트 모드 UI 구성을 구현 계획 수준으로 정리했다.
+- 실제 C++/에셋 구현은 진행하지 않았고, 현재 입력 매핑과 `UChameleonColorPickerWidget` 구조를 확인한 뒤 구현 단계만 제안했다.
+
+## 2026-07-09 12:46:40 (소요시간: 00:35:00)
+
+- Tab 입력 시 커서만 켜지고 UMG 위젯이 보이지 않는 문제와, 커서를 `imagegen` 기반 붓 모양 이미지로 처리해 달라는 요청을 처리했다.
+- `NativeConstruct()`에서 빈 트리를 런타임 생성하는 방식은 WBP Designer와 Slate 생성 순서상 적절하지 않다는 사용자 지적에 맞춰, `ChameleonPainterBuildTestContent` 커맨드렛이 `WBP_ChameleonColorPicker.WidgetTree` 자체를 에디터 단계에서 생성/저장하도록 변경했다.
+- `WBP_ChameleonColorPicker`에 `ColorPickerSize`, `BrushColorPanel`, `ColorPickerRoot`, `ColorPreview`, `Swatch0~7`, `RedSlider`, `GreenSlider`, `BlueSlider`, `CommitButton`을 실제 Designer 위젯으로 구성했다.
+- `UChameleonColorPickerWidget`는 WBP에 저장된 위젯 이름을 찾아 슬라이더/스와치/Apply 이벤트를 바인딩하도록 보강했다.
+- `imagegen`으로 붓 모양 커서 원본을 생성하고, `HideSeek/SourceAssets/UI/ChameleonPainter/T_ChameleonBrushCursor_Source.png`와 투명/회전 보정된 `T_ChameleonBrushCursor.png`를 추가했다.
+- 커맨드렛이 `/Game/ChameleonPainterTest/UI/T_ChameleonBrushCursor`, `M_CPT_BrushCursor_UI`, `WBP_ChameleonBrushCursor`를 생성하도록 추가했다.
+- `M_CPT_BrushCursor_UI`는 텍스처 알파 import 상태와 무관하게 검은 배경을 opacity 0으로 처리하는 UI 머티리얼로 구성했다.
+- `AChameleonHiderCharacter`에 `BrushCursorWidgetClass`를 추가하고, 컬러피커 표시 중 `PlayerController->SetMouseCursorWidget`으로 붓 커서 WBP를 등록하도록 구현했다.
+- `BP_ChameleonHiderCharacter`에 컬러피커 WBP와 붓 커서 WBP 클래스를 커맨드렛에서 연결했다.
+- 검증으로 `HideSeekEditor Win64 Development` 빌드가 성공했고, `ChameleonPainterBuildTestContent` 커맨드렛이 0 errors, 기존 metaball degenerate triangle 경고 2건으로 성공했다.

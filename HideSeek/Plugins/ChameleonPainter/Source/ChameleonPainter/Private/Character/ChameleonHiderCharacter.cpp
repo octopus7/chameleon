@@ -12,6 +12,7 @@
 #include "GameFramework/CharacterMovementComponent.h"
 #include "GameFramework/PlayerController.h"
 #include "GameFramework/SpringArmComponent.h"
+#include "InputCoreTypes.h"
 #include "InputAction.h"
 #include "InputMappingContext.h"
 #include "Materials/MaterialInterface.h"
@@ -322,6 +323,22 @@ void AChameleonHiderCharacter::EnsureColorPicker()
 	}
 }
 
+void AChameleonHiderCharacter::EnsureBrushCursor()
+{
+	if (BrushCursorWidget || !IsLocallyControlled() || !BrushCursorWidgetClass)
+	{
+		return;
+	}
+
+	APlayerController* PlayerController = Cast<APlayerController>(GetController());
+	if (!PlayerController)
+	{
+		return;
+	}
+
+	BrushCursorWidget = CreateWidget<UUserWidget>(PlayerController, BrushCursorWidgetClass);
+}
+
 void AChameleonHiderCharacter::SetColorPickerVisible(bool bVisible)
 {
 	bColorPickerVisible = bVisible;
@@ -337,6 +354,13 @@ void AChameleonHiderCharacter::SetColorPickerVisible(bool bVisible)
 		PlayerController->bShowMouseCursor = bVisible;
 		if (bVisible)
 		{
+			EnsureBrushCursor();
+			if (BrushCursorWidget)
+			{
+				PlayerController->CurrentMouseCursor = EMouseCursor::Default;
+				PlayerController->SetMouseCursorWidget(EMouseCursor::Default, BrushCursorWidget);
+			}
+
 			FInputModeGameAndUI InputMode;
 			InputMode.SetHideCursorDuringCapture(false);
 			InputMode.SetLockMouseToViewportBehavior(EMouseLockMode::DoNotLock);
@@ -344,6 +368,7 @@ void AChameleonHiderCharacter::SetColorPickerVisible(bool bVisible)
 		}
 		else
 		{
+			PlayerController->SetMouseCursorWidget(EMouseCursor::Default, nullptr);
 			FInputModeGameOnly InputMode;
 			PlayerController->SetInputMode(InputMode);
 		}

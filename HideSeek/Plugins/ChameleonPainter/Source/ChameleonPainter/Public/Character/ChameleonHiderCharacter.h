@@ -11,6 +11,7 @@ class UChameleonMetaballBodyComponent;
 class UChameleonPainterInputConfig;
 class UChameleonPaintComponent;
 class USpringArmComponent;
+class UUserWidget;
 
 UCLASS(BlueprintType, Blueprintable)
 class CHAMELEONPAINTER_API AChameleonHiderCharacter : public ACharacter
@@ -45,6 +46,9 @@ public:
 
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Chameleon|UI")
 	TSubclassOf<UChameleonColorPickerWidget> ColorPickerWidgetClass;
+
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Chameleon|UI")
+	TSubclassOf<UUserWidget> BrushCursorWidgetClass;
 
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Chameleon|Paint", meta = (ClampMin = "1.0"))
 	float BrushRadiusCm = 18.0f;
@@ -82,6 +86,7 @@ private:
 	bool TraceFromView(float Distance, FHitResult& OutHit, bool bTraceSelfBody) const;
 	bool TrySampleColorFromHit(const FHitResult& Hit, FLinearColor& OutColor) const;
 	void EnsureColorPicker();
+	void EnsureBrushCursor();
 	void SetColorPickerVisible(bool bVisible);
 
 	UPROPERTY(Transient)
@@ -89,6 +94,9 @@ private:
 
 	UPROPERTY(Transient)
 	TObjectPtr<UChameleonColorPickerWidget> ColorPickerWidget;
+
+	UPROPERTY(Transient)
+	TObjectPtr<UUserWidget> BrushCursorWidget;
 
 	bool bPaintHeld = false;
 	bool bColorPickerVisible = false;
